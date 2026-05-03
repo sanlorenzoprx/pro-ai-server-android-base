@@ -47,6 +47,13 @@ implemented surface includes:
 Deferred work should be tracked as new product requirements rather than as MVP
 gaps in this baseline. Fastboot remains out of scope for the MVP flow.
 
+## Deferred Product Work
+
+- Windows tray status monitor: a small toolbar/tray indicator that reuses the
+  `pro-ai-server status` checks to show phone connection, USB tunnel, Ollama
+  readiness, Continue-ready IDE integration, and active connection mode without
+  opening a terminal.
+
 ## Test-Driven Rule
 
 For every MVP feature:

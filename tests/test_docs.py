@@ -20,6 +20,8 @@ def test_readme_documents_current_mvp_cli_commands_and_bundled_adb_policy():
         "configure-continue --mode usb",
         "tunnel",
         "setup --execute --yes",
+        "setup-tailscale",
+        "status",
         "diagnose --output",
     ):
         assert command in readme
@@ -31,6 +33,8 @@ def test_readme_documents_current_mvp_cli_commands_and_bundled_adb_policy():
     assert "%userprofile%\\.continue\\config.yaml" in readme
     assert "lan exposes ollama" in readme
     assert "tailscale" in readme and "--host" in readme
+    assert "--install-host --yes" in readme
+    assert "--android-apk <path> --yes" in readme
 
 
 def test_cli_workflow_documents_windows_first_flow_and_safety_claims():
@@ -45,6 +49,8 @@ def test_cli_workflow_documents_windows_first_flow_and_safety_claims():
         "pro-ai-server generate-scripts",
         "pro-ai-server push-scripts",
         "pro-ai-server configure-continue --mode usb",
+        "pro-ai-server setup-tailscale",
+        "pro-ai-server status",
         "pro-ai-server tunnel",
         "pro-ai-server setup",
         "pro-ai-server setup --execute --yes",
@@ -64,6 +70,10 @@ def test_cli_workflow_documents_windows_first_flow_and_safety_claims():
         "lan mode exposes ollama",
         "tailscale mode should use a private tailscale hostname",
         "lan and tailscale require an explicit host",
+        "com.tailscale.ipn",
+        "winget",
+        "--android-apk",
+        "concise readiness view",
         "127.0.0.1:11434",
         "adb reverse tcp:11434 tcp:11434",
     ):

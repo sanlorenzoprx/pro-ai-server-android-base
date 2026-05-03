@@ -123,7 +123,35 @@ pro-ai-server configure-continue --mode tailscale --host 100.x.x.x
 
 LAN mode exposes Ollama to devices on the local network. Tailscale mode should use a private Tailscale hostname or `100.x.x.x` IP address.
 
-## 9. Create the USB Tunnel
+## 9. Set Up Tailscale
+
+Use Tailscale when the phone and laptop should keep a stable private address without relying on the same Wi-Fi router:
+
+```powershell
+pro-ai-server setup-tailscale
+```
+
+The command verifies the Windows host client with `tailscale version`, checks the connected Android phone for package `com.tailscale.ipn`, and opens the Tailscale Play Store page on the phone when the Android app is missing.
+
+To install the Windows client with `winget`:
+
+```powershell
+pro-ai-server setup-tailscale --install-host --yes
+```
+
+To install a local Android APK over ADB:
+
+```powershell
+pro-ai-server setup-tailscale --android-apk C:\path\to\tailscale.apk --yes
+```
+
+Android Play Store installation and Tailscale sign-in still require user approval on the device. After Tailscale is installed and signed in on both devices, configure Continue with the phone's private Tailscale hostname or `100.x.x.x` IP:
+
+```powershell
+pro-ai-server configure-continue --mode tailscale --host pro-ai-phone
+```
+
+## 10. Create the USB Tunnel
 
 ```powershell
 pro-ai-server tunnel
@@ -143,7 +171,7 @@ adb reverse tcp:11434 tcp:11434
 
 After the tunnel is active, Continue can use `http://localhost:11434` from the Windows host while Ollama remains bound to phone-local loopback in USB mode.
 
-## 10. Guided Setup
+## 11. Guided Setup
 
 Plan mode is the default:
 
@@ -169,7 +197,21 @@ pro-ai-server setup --mode tailscale --host pro-ai-phone
 pro-ai-server setup --mode lan --host 192.168.1.50 --no-tunnel
 ```
 
-## 11. Capture Diagnostics
+## 12. Check Live Status
+
+```powershell
+pro-ai-server status
+```
+
+`status` prints a concise readiness view for the connected phone, USB tunnel, Ollama `/api/tags`, and Continue-ready IDE integration. It is read-only and intended for quick daily checks before opening Cursor, VS Code, VSCodium, or Windsurf.
+
+Use a custom API base for LAN or Tailscale checks:
+
+```powershell
+pro-ai-server status --api-base http://pro-ai-phone:11434
+```
+
+## 13. Capture Diagnostics
 
 ```powershell
 pro-ai-server diagnose

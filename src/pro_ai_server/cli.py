@@ -20,18 +20,22 @@ from pro_ai_server.ide import detect_continue_extension_status
 from pro_ai_server.ide import install_continue_extension
 from pro_ai_server.ide import installed_ide_clis
 from pro_ai_server.models import model_plan_for_profile, model_plan_for_ram
-from pro_ai_server.ollama import assess_model_inventory, build_ollama_tags_command
+from pro_ai_server.ollama import assess_model_inventory, assess_ollama_server_status, build_ollama_tags_command
 from pro_ai_server.packaging import validate_windows_platform_tools_layouts
 from pro_ai_server.release_validation import validate_release_layout
 from pro_ai_server.script_delivery import build_script_delivery_plan
 from pro_ai_server.setup_receipt import build_setup_receipt, render_setup_receipt
 from pro_ai_server.setup_workflow import plan_setup_workflow
+from pro_ai_server.status import build_status_report, render_status_report
 from pro_ai_server.termux_readiness import (
     assess_termux_readiness,
     build_termux_package_info_command,
     build_termux_readiness_commands,
 )
 from pro_ai_server.termux_scripts import generate_termux_scripts, write_termux_scripts
+from pro_ai_server.tailscale import build_tailscale_install_plan
+from pro_ai_server.tailscale import tailscale_android_installed
+from pro_ai_server.tailscale import tailscale_host_installed
 
 app = typer.Typer(help="Pro AI Server: Android phone local AI server manager.")
 console = Console()
@@ -399,6 +403,75 @@ def server_check(
         raise typer.Exit(code=1)
 
 
+@app.command("setup-tailscale")
+def setup_tailscale(
+    serial: str | None = typer.Option(None, help="ADB device serial to use when multiple phones are connected."),
+    android_apk: Path | None = typer.Option(
+        None,
+        "--android-apk",
+        help="Optional local Tailscale Android APK to install with adb install.",
+    ),
+    install_host: bool = typer.Option(False, "--install-host", help="Install Tailscale on Windows with winget."),
+    yes: bool = typer.Option(False, "--yes", help="Confirm host or phone app installation actions."),
+) -> None:
+    """Install/check Tailscale on Windows and Android for private remote access mode."""
+    adb = resolve_adb()
+    if not adb:
+        console.print("[red]adb not found. Release builds should include bundled platform-tools.[/red]")
+        raise typer.Exit(code=1)
+
+    if android_apk is not None and not android_apk.exists():
+        console.print(f"[red]Tailscale Android APK not found:[/red] {android_apk}")
+        raise typer.Exit(code=1)
+
+    try:
+        selected_serial = select_device_serial(adb, serial)
+        plan = build_tailscale_install_plan(adb, serial=selected_serial, android_apk=android_apk)
+        try:
+            host_output = run_command(list(plan.host_check_command))
+            host_ready = tailscale_host_installed(host_output)
+        except CommandError:
+            host_ready = False
+
+        if host_ready:
+            console.print("[green]OK[/green] Tailscale is available on this Windows host.")
+        elif install_host:
+            if not yes:
+                console.print("[red]Refusing to install host Tailscale without --yes.[/red]")
+                raise typer.Exit(code=1)
+            run_command(list(plan.host_install_command))
+            console.print("[green]Installed[/green] Tailscale on this Windows host with winget.")
+        else:
+            console.print(
+                "[yellow]Missing[/yellow] Tailscale was not found on this Windows host. "
+                "Re-run with --install-host --yes to install with winget."
+            )
+
+        android_output = run_optional_command(list(plan.android_check_command))
+        if tailscale_android_installed(android_output):
+            console.print(f"[green]OK[/green] Tailscale is installed on Android device {selected_serial}.")
+        elif android_apk is not None:
+            if not yes:
+                console.print("[red]Refusing to install Android Tailscale APK without --yes.[/red]")
+                raise typer.Exit(code=1)
+            assert plan.android_install_command is not None
+            run_command(list(plan.android_install_command))
+            console.print(f"[green]Installed[/green] Tailscale APK on Android device {selected_serial}.")
+        else:
+            run_command(list(plan.android_open_store_command))
+            console.print(
+                f"[yellow]Opened[/yellow] Tailscale Play Store page on Android device {selected_serial}. "
+                "Install it there, sign in, then use `configure-continue --mode tailscale --host <tailscale-host>`."
+            )
+    except CommandError as exc:
+        console.print("[red]Tailscale setup failed while running an external command.[/red]")
+        console.print(str(exc))
+        raise typer.Exit(code=1) from exc
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+
 @app.command()
 def setup(
     mode: str = typer.Option("usb", help="Connection mode: usb, lan, or tailscale."),
@@ -580,6 +653,32 @@ def diagnose(output: Path | None = typer.Option(None, help="Optional file path f
     if output:
         written = write_diagnostics_report(report, output)
         console.print(f"[green]Wrote diagnostics report:[/green] {written}")
+
+
+@app.command()
+def status(api_base: str = typer.Option("http://localhost:11434", help="Ollama API base URL to check.")) -> None:
+    """Show concise phone, tunnel, Ollama, and IDE readiness."""
+    adb = resolve_adb()
+    adb_devices_output = run_optional_command([adb, "devices"]) if adb else None
+    adb_reverse_output = run_optional_command([adb, "reverse", "--list"]) if adb else None
+    tags_output = run_optional_command(list(build_ollama_tags_command(api_base)))
+    ollama_status = assess_ollama_server_status(tags_output)
+    ide_statuses = tuple(detect_continue_extension_status(ide) for ide in detect_ide_clis())
+
+    report = build_status_report(
+        adb_devices_output,
+        adb_reverse_output,
+        ollama_status,
+        ide_statuses,
+        adb_path=adb,
+    )
+    for line in render_status_report(report):
+        if line.startswith("OK "):
+            console.print(f"[green]{line}[/green]")
+        elif line.startswith("Needs attention "):
+            console.print(f"[yellow]{line}[/yellow]")
+        else:
+            console.print(line)
 
 
 @app.command()

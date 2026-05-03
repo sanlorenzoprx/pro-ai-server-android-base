@@ -4,7 +4,9 @@ from pro_ai_server import cli
 from pro_ai_server.continue_config import ContinueConfigWriteResult
 from pro_ai_server.diagnostics import DiagnosticsReport
 from pro_ai_server.ide import IdeCli, IdeExtensionStatus
+from pro_ai_server.ollama import OllamaServerStatus
 from pro_ai_server.release_validation import ReleaseValidationIssue, ReleaseValidationResult
+from pro_ai_server.status import ProAiStatus, StatusItem
 
 
 def test_setup_prints_plan_without_executing_actions():
@@ -262,3 +264,142 @@ def test_configure_continue_warns_when_no_continue_ready_ide_is_detected(monkeyp
 
     assert result.exit_code == 0
     assert "No supported IDE with the Continue extension was detected" in result.output
+
+
+def test_status_prints_concise_readiness_report(monkeypatch):
+    runner = CliRunner()
+
+    monkeypatch.setattr(cli, "resolve_adb", lambda: "adb")
+    monkeypatch.setattr(cli, "run_optional_command", lambda command: "output")
+    monkeypatch.setattr(cli, "assess_ollama_server_status", lambda output: OllamaServerStatus(ok=True))
+    monkeypatch.setattr(cli, "detect_ide_clis", lambda: ())
+    monkeypatch.setattr(
+        cli,
+        "build_status_report",
+        lambda devices, reverse, ollama, ides, adb_path: ProAiStatus(
+            items=(
+                StatusItem("Phone", True, "connected (ABC123)"),
+                StatusItem("Ollama", True, "responding on /api/tags (0 models)"),
+            )
+        ),
+    )
+
+    result = runner.invoke(cli.app, ["status"])
+
+    assert result.exit_code == 0
+    assert "Pro AI Server Status" in result.output
+    assert "OK Phone: connected (ABC123)" in result.output
+    assert "OK Ollama: responding on /api/tags" in result.output
+
+
+def test_setup_tailscale_reports_already_installed_on_host_and_phone(monkeypatch):
+    runner = CliRunner()
+
+    def fake_run(command, capture_output, text):
+        import subprocess
+
+        outputs = {
+            ("adb", "devices"): "List of devices attached\nABC123\tdevice\n",
+            ("tailscale", "version"): "1.96.4",
+            ("adb", "-s", "ABC123", "shell", "pm", "path", "com.tailscale.ipn"): (
+                "package:/data/app/com.tailscale.ipn/base.apk"
+            ),
+        }
+        return subprocess.CompletedProcess(command, 0, stdout=outputs[tuple(command)], stderr="")
+
+    monkeypatch.setattr(cli, "resolve_adb", lambda: "adb")
+    monkeypatch.setattr(cli.subprocess, "run", fake_run)
+
+    result = runner.invoke(cli.app, ["setup-tailscale"])
+
+    assert result.exit_code == 0
+    assert "Tailscale is available on this Windows host" in result.output
+    assert "Tailscale is installed on Android device ABC123" in result.output
+
+
+def test_setup_tailscale_installs_android_apk_with_yes(monkeypatch, tmp_path):
+    runner = CliRunner()
+    apk = tmp_path / "tailscale.apk"
+    apk.write_text("apk", encoding="utf-8")
+    commands = []
+
+    def fake_run(command, capture_output, text):
+        import subprocess
+
+        commands.append(command)
+        if command == ["adb", "devices"]:
+            return subprocess.CompletedProcess(command, 0, stdout="List of devices attached\nABC123\tdevice\n", stderr="")
+        if command == ["tailscale", "version"]:
+            return subprocess.CompletedProcess(command, 1, stdout="", stderr="not found")
+        if command == ["adb", "-s", "ABC123", "shell", "pm", "path", "com.tailscale.ipn"]:
+            return subprocess.CompletedProcess(command, 1, stdout="", stderr="package not found")
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(cli, "resolve_adb", lambda: "adb")
+    monkeypatch.setattr(cli.subprocess, "run", fake_run)
+
+    result = runner.invoke(cli.app, ["setup-tailscale", "--android-apk", str(apk), "--yes"])
+
+    assert result.exit_code == 0
+    assert ["adb", "-s", "ABC123", "install", "-r", str(apk)] in commands
+    assert "Installed" in result.output
+
+
+def test_setup_tailscale_refuses_android_apk_install_without_yes(monkeypatch, tmp_path):
+    runner = CliRunner()
+    apk = tmp_path / "tailscale.apk"
+    apk.write_text("apk", encoding="utf-8")
+
+    def fake_run(command, capture_output, text):
+        import subprocess
+
+        if command == ["adb", "devices"]:
+            return subprocess.CompletedProcess(command, 0, stdout="List of devices attached\nABC123\tdevice\n", stderr="")
+        if command == ["tailscale", "version"]:
+            return subprocess.CompletedProcess(command, 1, stdout="", stderr="not found")
+        return subprocess.CompletedProcess(command, 1, stdout="", stderr="package not found")
+
+    monkeypatch.setattr(cli, "resolve_adb", lambda: "adb")
+    monkeypatch.setattr(cli.subprocess, "run", fake_run)
+
+    result = runner.invoke(cli.app, ["setup-tailscale", "--android-apk", str(apk)])
+
+    assert result.exit_code == 1
+    assert "without --yes" in result.output
+
+
+def test_setup_tailscale_opens_play_store_when_phone_app_is_missing(monkeypatch):
+    runner = CliRunner()
+    commands = []
+
+    def fake_run(command, capture_output, text):
+        import subprocess
+
+        commands.append(command)
+        if command == ["adb", "devices"]:
+            return subprocess.CompletedProcess(command, 0, stdout="List of devices attached\nABC123\tdevice\n", stderr="")
+        if command == ["tailscale", "version"]:
+            return subprocess.CompletedProcess(command, 1, stdout="", stderr="not found")
+        if command == ["adb", "-s", "ABC123", "shell", "pm", "path", "com.tailscale.ipn"]:
+            return subprocess.CompletedProcess(command, 1, stdout="", stderr="package not found")
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(cli, "resolve_adb", lambda: "adb")
+    monkeypatch.setattr(cli.subprocess, "run", fake_run)
+
+    result = runner.invoke(cli.app, ["setup-tailscale"])
+
+    assert result.exit_code == 0
+    assert [
+        "adb",
+        "-s",
+        "ABC123",
+        "shell",
+        "am",
+        "start",
+        "-a",
+        "android.intent.action.VIEW",
+        "-d",
+        "market://details?id=com.tailscale.ipn",
+    ] in commands
+    assert "Opened" in result.output

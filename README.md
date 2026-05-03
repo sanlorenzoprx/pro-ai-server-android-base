@@ -22,6 +22,8 @@ The CLI currently supports:
 - `configure-continue --mode usb` Continue `config.yaml` generation, with backup protection for an existing config.
 - `tunnel --serial <device>` USB forwarding with `adb reverse tcp:11434 tcp:11434`.
 - `setup` plan mode and `setup --execute --yes` for the guided MVP flow.
+- `setup-tailscale` host/phone Tailscale readiness checks with Windows `winget`, Android APK install, and Play Store launch support.
+- `status` concise readiness summary for phone, USB tunnel, Ollama, and IDE integration.
 - `diagnose --output diagnostics.txt` support reports for host, phone, tunnel, and local Ollama checks.
 
 The MVP prefers bundled ADB at `embedded-tools/windows/platform-tools/adb.exe`, then falls back to system `adb` on `PATH`. Fastboot is not used by MVP behavior.
@@ -54,6 +56,8 @@ See [docs/CLI_WORKFLOW.md](docs/CLI_WORKFLOW.md) for the full MVP CLI flow, incl
 USB is the default and safest MVP mode. It keeps Ollama bound to `127.0.0.1:11434` on the phone and uses `adb reverse` so Continue talks to `http://localhost:11434` on the host.
 
 LAN and Tailscale modes require `--host` when configuring Continue or planning setup. LAN exposes Ollama to devices on the local network. Tailscale should use a private Tailscale hostname or `100.x.x.x` IP address.
+
+Use `pro-ai-server setup-tailscale` to check Windows and Android Tailscale readiness. It can install the Windows client with `winget` using `--install-host --yes`, install a local Android APK with `--android-apk <path> --yes`, or open the Android Play Store page on the connected phone.
 
 ## Design Principles
 
