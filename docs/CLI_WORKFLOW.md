@@ -10,6 +10,8 @@ pro-ai-server doctor
 
 `doctor` reports Python, Continue-compatible IDE CLIs, and ADB availability. Release builds should include bundled ADB at `embedded-tools/windows/platform-tools/adb.exe`; the CLI prefers that bundled ADB and falls back to system `adb` on `PATH`.
 
+On Windows, this includes Cursor when the `cursor` CLI is installed. Cursor integration uses the Continue extension and the same `%USERPROFILE%\.continue\config.yaml` written by `configure-continue`.
+
 Fastboot is not used in MVP behavior.
 
 ## 2. Validate Bundled Platform Tools
@@ -108,6 +110,8 @@ pro-ai-server configure-continue --mode usb
 ```
 
 This writes `%USERPROFILE%\.continue\config.yaml` for an Ollama-compatible API at `http://localhost:11434`. If a Continue config already exists, the CLI backs it up first with a `config.yaml.pro-ai-server-backup-YYYYMMDD-HHMMSS` filename.
+
+Cursor uses this same Continue configuration path when the Continue extension is installed, so no separate Cursor-specific config file is required for the MVP flow.
 
 LAN and Tailscale require an explicit host:
 

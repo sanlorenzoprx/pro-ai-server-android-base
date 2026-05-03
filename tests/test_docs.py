@@ -27,6 +27,8 @@ def test_readme_documents_current_mvp_cli_commands_and_bundled_adb_policy():
     assert "bundled adb" in readme
     assert "fastboot is not used" in readme
     assert "back up existing continue configuration" in readme
+    assert "cursor integration is supported through the continue extension" in readme
+    assert "%userprofile%\\.continue\\config.yaml" in readme
     assert "lan exposes ollama" in readme
     assert "tailscale" in readme and "--host" in readme
 
@@ -55,6 +57,8 @@ def test_cli_workflow_documents_windows_first_flow_and_safety_claims():
         "fastboot is not used",
         "does not require `fastboot.exe`",
         "no fastboot",
+        "includes cursor",
+        "no separate cursor-specific config file is required",
         "backs it up first",
         "termux:widget still requires manual installation",
         "lan mode exposes ollama",

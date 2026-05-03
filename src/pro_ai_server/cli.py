@@ -16,6 +16,9 @@ from pro_ai_server.device_scan import (
 )
 from pro_ai_server.diagnostics import build_diagnostics_report, write_diagnostics_report
 from pro_ai_server.ide import detect_ide_clis
+from pro_ai_server.ide import detect_continue_extension_status
+from pro_ai_server.ide import install_continue_extension
+from pro_ai_server.ide import installed_ide_clis
 from pro_ai_server.models import model_plan_for_profile, model_plan_for_ram
 from pro_ai_server.ollama import assess_model_inventory, build_ollama_tags_command
 from pro_ai_server.packaging import validate_windows_platform_tools_layouts
@@ -157,6 +160,63 @@ def doctor() -> None:
     for ide in detect_ide_clis():
         if ide.installed:
             console.print(f"[green]OK[/green] IDE CLI found: {ide.command} -> {ide.path}")
+            extension_status = detect_continue_extension_status(ide)
+            if extension_status.installed is True:
+                console.print(f"  [green]OK[/green] Continue extension installed: {extension_status.extension_id}")
+            elif extension_status.installed is False:
+                console.print(
+                    "  [yellow]Missing[/yellow] Continue extension not installed. "
+                    f"Run `pro-ai-server install-continue-extension --ide {ide.command}`."
+                )
+            elif extension_status.error:
+                console.print(f"  [yellow]Unknown[/yellow] Continue extension status: {extension_status.error}")
+
+
+@app.command("install-continue-extension")
+def install_continue(
+    ide_name: str | None = typer.Option(
+        None,
+        "--ide",
+        help="IDE CLI to target: code, cursor, codium, or windsurf. Defaults to all installed IDE CLIs.",
+    ),
+) -> None:
+    """Install the Continue extension into one or more supported IDEs and verify it."""
+    detected = {ide.command: ide for ide in installed_ide_clis()}
+
+    if ide_name:
+        targets = [detected.get(ide_name)]
+        if targets[0] is None:
+            console.print(f"[red]IDE CLI not found or not installed: {ide_name}[/red]")
+            raise typer.Exit(code=1)
+    else:
+        targets = list(detected.values())
+        if not targets:
+            console.print("[red]No supported IDE CLIs found. Install Cursor, VS Code, VSCodium, or Windsurf first.[/red]")
+            raise typer.Exit(code=1)
+
+    failed = False
+    for ide in targets:
+        assert ide is not None
+        try:
+            status = detect_continue_extension_status(ide)
+            if status.installed is True:
+                console.print(f"[green]OK[/green] Continue extension already installed in {ide.command}.")
+                continue
+
+            console.print(f"Installing Continue extension in {ide.command}...")
+            status = install_continue_extension(ide)
+            if status.installed is True:
+                console.print(f"[green]Installed[/green] Continue extension in {ide.command}.")
+            else:
+                console.print(f"[yellow]Unknown[/yellow] Could not verify Continue extension in {ide.command}.")
+                failed = True
+        except (OSError, ValueError) as exc:
+            console.print(f"[red]Failed to install Continue extension in {ide.command}.[/red]")
+            console.print(str(exc))
+            failed = True
+
+    if failed:
+        raise typer.Exit(code=1)
 
 
 @app.command()
@@ -251,6 +311,21 @@ def configure_continue(
     console.print(f"API base: {result.api_base}")
     if result.backup_path:
         console.print(f"Backup: {result.backup_path}")
+
+    ready_ides = [
+        status.ide.command
+        for status in (detect_continue_extension_status(ide) for ide in installed_ide_clis())
+        if status.installed is True
+    ]
+    if ready_ides:
+        console.print(f"Continue-ready IDEs: {', '.join(ready_ides)}")
+    else:
+        console.print(
+            "[yellow]Warning:[/yellow] No supported IDE with the Continue extension was detected. "
+            "Install it with `pro-ai-server install-continue-extension --ide cursor` "
+            "or the equivalent IDE CLI before using this config."
+        )
+
     for warning in exposure_warnings(mode):
         console.print(f"[yellow]Warning:[/yellow] {warning}")
 

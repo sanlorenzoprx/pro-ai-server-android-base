@@ -26,6 +26,8 @@ The CLI currently supports:
 
 The MVP prefers bundled ADB at `embedded-tools/windows/platform-tools/adb.exe`, then falls back to system `adb` on `PATH`. Fastboot is not used by MVP behavior.
 
+Cursor integration is supported through the Continue extension. `doctor` detects the `cursor` CLI on the host, and `configure-continue` writes the same `%USERPROFILE%\.continue\config.yaml` used by Continue-compatible IDEs on Windows.
+
 ## Windows Quickstart
 
 ```powershell

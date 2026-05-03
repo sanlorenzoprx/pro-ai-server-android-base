@@ -1,7 +1,9 @@
 from typer.testing import CliRunner
 
 from pro_ai_server import cli
+from pro_ai_server.continue_config import ContinueConfigWriteResult
 from pro_ai_server.diagnostics import DiagnosticsReport
+from pro_ai_server.ide import IdeCli, IdeExtensionStatus
 from pro_ai_server.release_validation import ReleaseValidationIssue, ReleaseValidationResult
 
 
@@ -180,3 +182,83 @@ def test_server_check_accepts_custom_api_base(monkeypatch):
 
     assert result.exit_code == 0
     assert "Ollama API: http://pro-ai-phone:11434" in result.output
+
+
+def test_doctor_reports_missing_continue_extension(monkeypatch):
+    runner = CliRunner()
+
+    monkeypatch.setattr(cli, "resolve_adb", lambda: None)
+    monkeypatch.setattr(cli.shutil, "which", lambda command: "C:/bin/python.exe" if command == "python" else None)
+    monkeypatch.setattr(cli, "detect_ide_clis", lambda: (IdeCli(command="cursor", path="C:/bin/cursor.cmd"),))
+    monkeypatch.setattr(
+        cli,
+        "detect_continue_extension_status",
+        lambda ide: IdeExtensionStatus(
+            ide=ide,
+            extension_id="Continue.continue",
+            installed=False,
+        ),
+    )
+
+    result = runner.invoke(cli.app, ["doctor"])
+
+    assert result.exit_code == 0
+    assert "IDE CLI found: cursor" in result.output
+    assert "Continue extension not installed" in result.output
+    assert "install-continue-extension --ide cursor" in result.output
+
+
+def test_install_continue_extension_command_installs_selected_ide(monkeypatch):
+    runner = CliRunner()
+    ide = IdeCli(command="cursor", path="C:/bin/cursor.cmd")
+
+    monkeypatch.setattr(cli, "installed_ide_clis", lambda: (ide,))
+    monkeypatch.setattr(
+        cli,
+        "detect_continue_extension_status",
+        lambda current_ide: IdeExtensionStatus(
+            ide=current_ide,
+            extension_id="Continue.continue",
+            installed=False,
+        ),
+    )
+    monkeypatch.setattr(
+        cli,
+        "install_continue_extension",
+        lambda current_ide: IdeExtensionStatus(
+            ide=current_ide,
+            extension_id="Continue.continue",
+            installed=True,
+        ),
+    )
+
+    result = runner.invoke(cli.app, ["install-continue-extension", "--ide", "cursor"])
+
+    assert result.exit_code == 0
+    assert "Installing Continue extension in cursor" in result.output
+    assert "Installed" in result.output
+
+
+def test_configure_continue_warns_when_no_continue_ready_ide_is_detected(monkeypatch, tmp_path):
+    runner = CliRunner()
+
+    monkeypatch.setattr(
+        cli,
+        "write_continue_config",
+        lambda plan, mode, host: ContinueConfigWriteResult(
+            config_path=tmp_path / ".continue" / "config.yaml",
+            backup_path=None,
+            api_base="http://localhost:11434",
+        ),
+    )
+    monkeypatch.setattr(cli, "installed_ide_clis", lambda: (IdeCli(command="cursor", path="C:/bin/cursor.cmd"),))
+    monkeypatch.setattr(
+        cli,
+        "detect_continue_extension_status",
+        lambda ide: IdeExtensionStatus(ide=ide, extension_id="Continue.continue", installed=False),
+    )
+
+    result = runner.invoke(cli.app, ["configure-continue", "--mode", "usb"])
+
+    assert result.exit_code == 0
+    assert "No supported IDE with the Continue extension was detected" in result.output
