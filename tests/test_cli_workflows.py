@@ -3,6 +3,7 @@ from typer.testing import CliRunner
 from pro_ai_server import cli
 from pro_ai_server.continue_config import ContinueConfigWriteResult
 from pro_ai_server.diagnostics import DiagnosticsReport
+from pro_ai_server.gateway.ollama_client import OllamaProxyResult
 from pro_ai_server.ide import IdeCli, IdeExtensionStatus
 from pro_ai_server.ollama import OllamaServerStatus
 from pro_ai_server.release_validation import ReleaseValidationIssue, ReleaseValidationResult
@@ -184,6 +185,1054 @@ def test_server_check_accepts_custom_api_base(monkeypatch):
 
     assert result.exit_code == 0
     assert "Ollama API: http://pro-ai-phone:11434" in result.output
+
+
+def test_gateway_start_calls_server_with_configurable_models(monkeypatch):
+    runner = CliRunner()
+    captured = {}
+
+    def fake_serve_gateway(settings):
+        captured["settings"] = settings
+
+    monkeypatch.setattr(cli, "serve_gateway", fake_serve_gateway)
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "gateway-start",
+            "--host",
+            "127.0.0.2",
+            "--port",
+            "9000",
+            "--chat-model",
+            "custom-chat:latest",
+            "--autocomplete-model",
+            "custom-auto:latest",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Starting Pro CodeFlow gateway" in result.output
+    assert captured["settings"].host == "127.0.0.2"
+    assert captured["settings"].port == 9000
+    assert captured["settings"].chat_model == "custom-chat:latest"
+    assert captured["settings"].autocomplete_model == "custom-auto:latest"
+
+
+def test_gateway_status_reports_ready_gateway(monkeypatch):
+    runner = CliRunner()
+
+    monkeypatch.setattr(
+        cli,
+        "fetch_gateway_health",
+        lambda settings: {
+            "service": "pro-codeflow-gateway",
+            "status": "ok",
+            "version": "0.1.0",
+        },
+    )
+
+    result = runner.invoke(cli.app, ["gateway-status"])
+
+    assert result.exit_code == 0
+    assert "OK Gateway ready" in result.output
+    assert "pro-codeflow-gateway" in result.output
+
+
+def test_gateway_status_reports_unreachable_gateway(monkeypatch):
+    runner = CliRunner()
+
+    def fake_fetch_gateway_health(settings):
+        raise cli.GatewayStatusError("not reachable")
+
+    monkeypatch.setattr(cli, "fetch_gateway_health", fake_fetch_gateway_health)
+
+    result = runner.invoke(cli.app, ["gateway-status"])
+
+    assert result.exit_code == 1
+    assert "Gateway is not ready" in result.output
+    assert "not reachable" in result.output
+
+
+def test_gateway_route_test_prints_selected_route():
+    runner = CliRunner()
+
+    result = runner.invoke(cli.app, ["gateway-route-test", "--task", "chat"])
+
+    assert result.exit_code == 0
+    assert "Task: chat" in result.output
+    assert "Route: chat" in result.output
+    assert "Profile: balanced" in result.output
+    assert "Model: qwen2.5-coder:3b" in result.output
+
+
+def test_gateway_route_test_prints_unknown_task_fallback():
+    runner = CliRunner()
+
+    result = runner.invoke(cli.app, ["gateway-route-test", "--task", "security-review"])
+
+    assert result.exit_code == 0
+    assert "Task: security_review (fallback)" in result.output
+    assert "Route: chat" in result.output
+
+
+def test_gateway_route_test_accepts_custom_model_overrides():
+    runner = CliRunner()
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "gateway-route-test",
+            "--task",
+            "chat",
+            "--chat-model",
+            "custom-chat:latest",
+            "--prompt",
+            "hello",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Model: custom-chat:latest" in result.output
+    assert "Prompt received: yes" in result.output
+
+
+def test_gateway_route_test_reads_config_file(tmp_path):
+    runner = CliRunner()
+    config = tmp_path / "config.yaml"
+    config.write_text(
+        "routing:\n  routes:\n    security_review:\n      model: custom-review:latest\n",
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(cli.app, ["gateway-route-test", "--task", "security-review", "--config", str(config)])
+
+    assert result.exit_code == 0
+    assert "Model: custom-review:latest" in result.output
+
+
+def test_gateway_proxy_test_reports_available_models(monkeypatch):
+    runner = CliRunner()
+
+    monkeypatch.setattr(
+        cli,
+        "proxy_ollama_json",
+        lambda method, path, settings: OllamaProxyResult(
+            status_code=200,
+            payload={
+                "models": [
+                    {"name": "qwen2.5-coder:3b"},
+                    {"name": "qwen2.5-coder:1.5b"},
+                ]
+            },
+        ),
+    )
+
+    result = runner.invoke(cli.app, ["gateway-proxy-test", "--task", "chat"])
+
+    assert result.exit_code == 0
+    assert "OK" in result.output
+    assert "Route chat" in result.output
+
+
+def test_gateway_proxy_test_reports_missing_models(monkeypatch):
+    runner = CliRunner()
+
+    monkeypatch.setattr(
+        cli,
+        "proxy_ollama_json",
+        lambda method, path, settings: OllamaProxyResult(status_code=200, payload={"models": []}),
+    )
+
+    result = runner.invoke(cli.app, ["gateway-proxy-test", "--task", "chat"])
+
+    assert result.exit_code == 1
+    assert "Missing models" in result.output
+    assert "ollama pull qwen2.5-coder:3b" in result.output
+
+
+def test_index_search_and_context_commands(tmp_path):
+    runner = CliRunner()
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "app.py").write_text("def gateway():\n    return 'context helper'\n", encoding="utf-8")
+    db = tmp_path / ".pro-ai-server" / "index.sqlite"
+
+    index_result = runner.invoke(cli.app, ["index", str(tmp_path), "--db", str(db)])
+    assert index_result.exit_code == 0
+    assert "Indexed files: 1" in index_result.output
+
+    status_result = runner.invoke(cli.app, ["index-status", "--db", str(db)])
+    assert status_result.exit_code == 0
+    assert "Indexed chunks: 1" in status_result.output
+
+    search_result = runner.invoke(cli.app, ["search", "gateway", "--db", str(db)])
+    assert search_result.exit_code == 0
+    assert "src/app.py#0" in search_result.output
+
+    context_result = runner.invoke(cli.app, ["context", "gateway", "--db", str(db)])
+    assert context_result.exit_code == 0
+    assert "# Project Context" in context_result.output
+    assert "context helper" in context_result.output
+
+
+def test_agent_prime_writes_last_prime(tmp_path, monkeypatch):
+    runner = CliRunner()
+
+    monkeypatch.setattr(
+        cli,
+        "build_prime_report",
+        lambda index_file_count, index_chunk_count: f"files={index_file_count};chunks={index_chunk_count}",
+    )
+
+    result = runner.invoke(cli.app, ["agent", "prime", "--root", str(tmp_path), "--db", str(tmp_path / "missing.sqlite")])
+
+    assert result.exit_code == 0
+    output = tmp_path / ".agents" / "memory" / "last-prime.md"
+    assert output.read_text(encoding="utf-8") == "files=None;chunks=None"
+    assert "Wrote agent prime" in result.output
+
+
+def test_agent_context_uses_project_memory_and_index(tmp_path):
+    runner = CliRunner()
+    (tmp_path / ".agents" / "memory").mkdir(parents=True)
+    (tmp_path / ".agents" / "memory" / "project-memory.md").write_text("Memory", encoding="utf-8")
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "app.py").write_text("gateway agent context", encoding="utf-8")
+    db = tmp_path / ".pro-ai-server" / "index.sqlite"
+    runner.invoke(cli.app, ["index", str(tmp_path), "--db", str(db)])
+
+    result = runner.invoke(cli.app, ["agent", "context", "gateway", "--root", str(tmp_path), "--db", str(db)])
+
+    assert result.exit_code == 0
+    assert "Memory" in result.output
+    assert "src/app.py:1-1 chunk 0" in result.output
+
+
+def test_agent_plan_writes_plan_from_memory_prime_and_index(tmp_path):
+    runner = CliRunner()
+    (tmp_path / ".agents" / "memory").mkdir(parents=True)
+    (tmp_path / ".agents" / "memory" / "project-memory.md").write_text("Memory", encoding="utf-8")
+    (tmp_path / ".agents" / "memory" / "last-prime.md").write_text("Prime", encoding="utf-8")
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "app.py").write_text("gateway plan context", encoding="utf-8")
+    db = tmp_path / ".pro-ai-server" / "index.sqlite"
+    runner.invoke(cli.app, ["index", str(tmp_path), "--db", str(db)])
+
+    result = runner.invoke(cli.app, ["agent", "plan", "Add Gateway Plan", "--root", str(tmp_path), "--db", str(db)])
+
+    assert result.exit_code == 0
+    plan_path = tmp_path / ".agents" / "plans" / "add-gateway-plan.plan.md"
+    plan = plan_path.read_text(encoding="utf-8")
+    assert "Wrote agent plan" in result.output
+    assert "# Plan: Add Gateway Plan" in plan
+    assert "Memory" in plan
+    assert "Prime" in plan
+    assert "gateway plan context" in plan
+
+
+def test_agent_plan_accepts_explicit_slug(tmp_path):
+    runner = CliRunner()
+
+    result = runner.invoke(cli.app, ["agent", "plan", "Add Gateway Plan", "--root", str(tmp_path), "--slug", "gateway-retry"])
+
+    assert result.exit_code == 0
+    assert (tmp_path / ".agents" / "plans" / "gateway-retry.plan.md").exists()
+
+
+def test_agent_report_writes_implementation_report(tmp_path):
+    runner = CliRunner()
+    ticket_dir = tmp_path / ".agents" / "build-tickets" / "phase-8"
+    ticket_dir.mkdir(parents=True)
+    (ticket_dir / "TKT-P8-001-ticket-status.md").write_text("# Ticket Status", encoding="utf-8")
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "agent",
+            "report",
+            "TKT-P8-001",
+            "--root",
+            str(tmp_path),
+            "--summary",
+            "Implemented ticket status.",
+            "--file-updated",
+            "src/pro_ai_server/cli.py",
+            "--validation",
+            "pytest tests/test_agent_reporter.py",
+        ],
+    )
+
+    assert result.exit_code == 0
+    report_path = tmp_path / ".agents" / "reports" / "TKT-P8-001-report.md"
+    report = report_path.read_text(encoding="utf-8")
+    assert "Wrote implementation report" in result.output
+    assert "Implemented ticket status." in report
+    assert "- src/pro_ai_server/cli.py" in report
+    assert "- pytest tests/test_agent_reporter.py" in report
+
+
+def test_agent_status_prints_ticket_summary(tmp_path):
+    runner = CliRunner()
+    ticket_dir = tmp_path / ".agents" / "build-tickets" / "phase-8"
+    ticket_dir.mkdir(parents=True)
+    (ticket_dir / "TKT-P8-001-ticket-status.md").write_text("# Ticket Status", encoding="utf-8")
+
+    result = runner.invoke(cli.app, ["agent", "status", "--root", str(tmp_path), "--phase", "phase-8"])
+
+    assert result.exit_code == 0
+    assert "Agent Ticket Status" in result.output
+    assert "Planned: 1" in result.output
+    assert "TKT-P8-001" in result.output
+
+
+def test_agent_improve_prints_self_improvement_review(tmp_path):
+    runner = CliRunner()
+    ticket_dir = tmp_path / ".agents" / "build-tickets" / "phase-9"
+    ticket_dir.mkdir(parents=True)
+    (ticket_dir / "TKT-P9-001-improve.md").write_text("# Improve", encoding="utf-8")
+
+    result = runner.invoke(cli.app, ["agent", "improve", "--root", str(tmp_path), "--phase", "phase-9"])
+
+    assert result.exit_code == 0
+    assert "Agent Self-Improvement Review" in result.output
+    assert "Planned: 1" in result.output
+
+
+def test_agent_improve_writes_self_improvement_review(tmp_path):
+    runner = CliRunner()
+
+    result = runner.invoke(cli.app, ["agent", "improve", "--root", str(tmp_path), "--write"])
+
+    assert result.exit_code == 0
+    output = tmp_path / ".agents" / "reports" / "self-improvement-review.md"
+    assert output.exists()
+    assert "Wrote self-improvement review" in result.output
+    assert "Agent Self-Improvement Review" in output.read_text(encoding="utf-8")
+
+
+def test_agent_ticketize_previews_accepted_recommendation(tmp_path):
+    runner = CliRunner()
+    report_dir = tmp_path / ".agents" / "reports"
+    report_dir.mkdir(parents=True)
+    (report_dir / "self-improvement-review.md").write_text(
+        "## Recommendations\n\n- Add missing validation evidence.\n- Test optional inputs.\n",
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(cli.app, ["agent", "ticketize", "--root", str(tmp_path), "--accept", "validation"])
+
+    assert result.exit_code == 0
+    assert "Ticketize Recommendations" in result.output
+    assert "TKT-P10-001" in result.output
+    assert "Add missing validation evidence" in result.output
+    assert not (tmp_path / ".agents" / "build-tickets" / "phase-10").exists()
+
+
+def test_agent_ticketize_defaults_to_next_available_ticket_number(tmp_path):
+    runner = CliRunner()
+    report_dir = tmp_path / ".agents" / "reports"
+    report_dir.mkdir(parents=True)
+    (report_dir / "self-improvement-review.md").write_text(
+        "## Recommendations\n\n- Add missing validation evidence.\n",
+        encoding="utf-8",
+    )
+    ticket_dir = tmp_path / ".agents" / "build-tickets" / "phase-10"
+    ticket_dir.mkdir(parents=True)
+    (ticket_dir / "TKT-P10-005-existing.md").write_text("# Existing", encoding="utf-8")
+
+    result = runner.invoke(cli.app, ["agent", "ticketize", "--root", str(tmp_path), "--accept", "validation"])
+
+    assert result.exit_code == 0
+    assert "TKT-P10-006" in result.output
+
+
+def test_agent_ticketize_writes_all_recommendations(tmp_path):
+    runner = CliRunner()
+    report_dir = tmp_path / ".agents" / "reports"
+    report_dir.mkdir(parents=True)
+    (report_dir / "self-improvement-review.md").write_text(
+        "## Recommendations\n\n- Add missing validation evidence.\n- Test optional inputs.\n",
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(cli.app, ["agent", "ticketize", "--root", str(tmp_path), "--all", "--write"])
+
+    assert result.exit_code == 0
+    assert "Wrote 2 ticket draft" in result.output
+    assert (tmp_path / ".agents" / "build-tickets" / "phase-10" / "TKT-P10-001-add-missing-validation-evidence.md").exists()
+    assert (tmp_path / ".agents" / "build-tickets" / "phase-10" / "TKT-P10-002-test-optional-inputs.md").exists()
+
+
+def test_agent_ticketize_reports_missing_review(tmp_path):
+    runner = CliRunner()
+
+    result = runner.invoke(cli.app, ["agent", "ticketize", "--root", str(tmp_path), "--all"])
+
+    assert result.exit_code == 1
+    assert "Self-improvement review not found" in result.output
+
+
+def test_agent_decide_records_ticket_decision(tmp_path):
+    runner = CliRunner()
+    ticket_dir = tmp_path / ".agents" / "build-tickets" / "phase-11"
+    ticket_dir.mkdir(parents=True)
+    (ticket_dir / "TKT-P11-001-example.md").write_text("# Example", encoding="utf-8")
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "agent",
+            "decide",
+            "TKT-P11-001",
+            "--decision",
+            "accepted",
+            "--reason",
+            "Ready.",
+            "--root",
+            str(tmp_path),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Recorded accepted decision for TKT-P11-001" in result.output
+    assert (tmp_path / ".agents" / "queue" / "ticket-decisions.json").exists()
+    assert (tmp_path / ".agents" / "queue" / "ticket-decisions.jsonl").exists()
+
+
+def test_agent_decide_rejects_invalid_decision(tmp_path):
+    runner = CliRunner()
+
+    result = runner.invoke(
+        cli.app,
+        ["agent", "decide", "TKT-P11-001", "--decision", "maybe", "--reason", "Nope.", "--root", str(tmp_path)],
+    )
+
+    assert result.exit_code == 1
+    assert "Decision must be one of" in result.output
+
+
+def test_agent_queue_prints_decision_summary(tmp_path):
+    runner = CliRunner()
+    runner.invoke(
+        cli.app,
+        [
+            "agent",
+            "decide",
+            "TKT-P11-001",
+            "--decision",
+            "deferred",
+            "--reason",
+            "Needs review.",
+            "--root",
+            str(tmp_path),
+        ],
+    )
+
+    result = runner.invoke(cli.app, ["agent", "queue", "--root", str(tmp_path)])
+
+    assert result.exit_code == 0
+    assert "Agent Ticket Decision Queue" in result.output
+    assert "Deferred: 1" in result.output
+    assert "TKT-P11-001" in result.output
+
+
+def test_agent_history_prints_decision_events(tmp_path):
+    runner = CliRunner()
+    runner.invoke(
+        cli.app,
+        [
+            "agent",
+            "decide",
+            "TKT-P11-001",
+            "--decision",
+            "deferred",
+            "--reason",
+            "Needs review.",
+            "--root",
+            str(tmp_path),
+        ],
+    )
+
+    result = runner.invoke(cli.app, ["agent", "history", "--root", str(tmp_path)])
+
+    assert result.exit_code == 0
+    assert "Agent Ticket Decision History" in result.output
+    assert "Events: 1" in result.output
+    assert "TKT-P11-001" in result.output
+
+
+def test_agent_handoff_prints_ready_ticket(tmp_path):
+    runner = CliRunner()
+    ticket_dir = tmp_path / ".agents" / "build-tickets" / "phase-13"
+    ticket_dir.mkdir(parents=True)
+    (ticket_dir / "TKT-P13-001-handoff.md").write_text("# TKT-P13-001 Handoff", encoding="utf-8")
+    runner.invoke(
+        cli.app,
+        [
+            "agent",
+            "decide",
+            "TKT-P13-001",
+            "--decision",
+            "accepted",
+            "--reason",
+            "Ready.",
+            "--root",
+            str(tmp_path),
+        ],
+    )
+
+    result = runner.invoke(cli.app, ["agent", "handoff", "--root", str(tmp_path), "--phase", "phase-13"])
+
+    assert result.exit_code == 0
+    assert "Agent Implementation Handoff" in result.output
+    assert "TKT-P13-001" in result.output
+    assert "Ready: 1" in result.output
+
+
+def test_agent_next_action_prints_selected_ticket(tmp_path):
+    runner = CliRunner()
+    ticket_dir = tmp_path / ".agents" / "build-tickets" / "phase-14"
+    ticket_dir.mkdir(parents=True)
+    (ticket_dir / "TKT-P14-001-next-action.md").write_text("# TKT-P14-001 Next Action", encoding="utf-8")
+    runner.invoke(
+        cli.app,
+        [
+            "agent",
+            "decide",
+            "TKT-P14-001",
+            "--decision",
+            "accepted",
+            "--reason",
+            "Ready.",
+            "--root",
+            str(tmp_path),
+        ],
+    )
+
+    result = runner.invoke(cli.app, ["agent", "next-action", "--root", str(tmp_path), "--phase", "phase-14"])
+
+    assert result.exit_code == 0
+    assert "Agent Next Action" in result.output
+    assert "Status: ready" in result.output
+    assert "TKT-P14-001" in result.output
+
+
+def test_agent_next_action_resume_policy_prioritizes_active_session(tmp_path):
+    runner = CliRunner()
+    ticket_dir = tmp_path / ".agents" / "build-tickets" / "phase-16"
+    ticket_dir.mkdir(parents=True)
+    (ticket_dir / "TKT-P16-001-available.md").write_text("# TKT-P16-001 Available", encoding="utf-8")
+    (ticket_dir / "TKT-P16-002-started.md").write_text("# TKT-P16-002 Started", encoding="utf-8")
+    for ticket_id in ("TKT-P16-001", "TKT-P16-002"):
+        runner.invoke(
+            cli.app,
+            [
+                "agent",
+                "decide",
+                ticket_id,
+                "--decision",
+                "accepted",
+                "--reason",
+                "Ready.",
+                "--root",
+                str(tmp_path),
+            ],
+        )
+    runner.invoke(
+        cli.app,
+        [
+            "agent",
+            "session",
+            "TKT-P16-002",
+            "--event",
+            "started",
+            "--note",
+            "Resume.",
+            "--root",
+            str(tmp_path),
+        ],
+    )
+
+    result = runner.invoke(
+        cli.app,
+        ["agent", "next-action", "--root", str(tmp_path), "--phase", "phase-16", "--session-policy", "resume"],
+    )
+
+    assert result.exit_code == 0
+    assert "TKT-P16-002" in result.output
+    assert "Session: started" in result.output
+
+
+def test_agent_packet_prints_execution_packet(tmp_path):
+    runner = CliRunner()
+    ticket_dir = tmp_path / ".agents" / "build-tickets" / "phase-14"
+    ticket_dir.mkdir(parents=True)
+    (ticket_dir / "TKT-P14-001-packet.md").write_text(
+        "# TKT-P14-001 Packet\n\n## Objective\n\nBuild it.",
+        encoding="utf-8",
+    )
+    runner.invoke(
+        cli.app,
+        [
+            "agent",
+            "decide",
+            "TKT-P14-001",
+            "--decision",
+            "accepted",
+            "--reason",
+            "Ready.",
+            "--root",
+            str(tmp_path),
+        ],
+    )
+
+    result = runner.invoke(cli.app, ["agent", "packet", "--root", str(tmp_path), "--phase", "phase-14"])
+
+    assert result.exit_code == 0
+    assert "Agent Execution Packet" in result.output
+    assert "TKT-P14-001" in result.output
+    assert "Build it." in result.output
+    assert "Validation Commands" in result.output
+
+
+def test_agent_packet_skips_finished_session_by_default(tmp_path):
+    runner = CliRunner()
+    ticket_dir = tmp_path / ".agents" / "build-tickets" / "phase-16"
+    ticket_dir.mkdir(parents=True)
+    (ticket_dir / "TKT-P16-001-finished.md").write_text("# TKT-P16-001 Finished", encoding="utf-8")
+    (ticket_dir / "TKT-P16-002-available.md").write_text("# TKT-P16-002 Available", encoding="utf-8")
+    for ticket_id in ("TKT-P16-001", "TKT-P16-002"):
+        runner.invoke(
+            cli.app,
+            [
+                "agent",
+                "decide",
+                ticket_id,
+                "--decision",
+                "accepted",
+                "--reason",
+                "Ready.",
+                "--root",
+                str(tmp_path),
+            ],
+        )
+    runner.invoke(
+        cli.app,
+        [
+            "agent",
+            "session",
+            "TKT-P16-001",
+            "--event",
+            "finished",
+            "--note",
+            "Waiting report.",
+            "--root",
+            str(tmp_path),
+        ],
+    )
+
+    result = runner.invoke(cli.app, ["agent", "packet", "--root", str(tmp_path), "--phase", "phase-16"])
+
+    assert result.exit_code == 0
+    assert "TKT-P16-002" in result.output
+    assert "TKT-P16-001" not in result.output
+
+
+def test_agent_packet_writes_default_output(tmp_path):
+    runner = CliRunner()
+    ticket_dir = tmp_path / ".agents" / "build-tickets" / "phase-14"
+    ticket_dir.mkdir(parents=True)
+    (ticket_dir / "TKT-P14-001-packet.md").write_text("# TKT-P14-001 Packet", encoding="utf-8")
+    runner.invoke(
+        cli.app,
+        [
+            "agent",
+            "decide",
+            "TKT-P14-001",
+            "--decision",
+            "accepted",
+            "--reason",
+            "Ready.",
+            "--root",
+            str(tmp_path),
+        ],
+    )
+
+    result = runner.invoke(cli.app, ["agent", "packet", "--root", str(tmp_path), "--phase", "phase-14", "--write"])
+
+    output = tmp_path / ".agents" / "execution" / "TKT-P14-001.execution.md"
+    assert result.exit_code == 0
+    assert "Wrote execution packet" in result.output
+    assert output.exists()
+    assert "Agent Execution Packet" in output.read_text(encoding="utf-8")
+
+
+def test_agent_session_records_work_session_event(tmp_path):
+    runner = CliRunner()
+    ticket_dir = tmp_path / ".agents" / "build-tickets" / "phase-15"
+    ticket_dir.mkdir(parents=True)
+    (ticket_dir / "TKT-P15-001-session.md").write_text("# TKT-P15-001 Session", encoding="utf-8")
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "agent",
+            "session",
+            "TKT-P15-001",
+            "--event",
+            "pickup",
+            "--note",
+            "Taking it.",
+            "--root",
+            str(tmp_path),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Recorded picked-up session event for TKT-P15-001" in result.output
+    assert (tmp_path / ".agents" / "execution" / "work-sessions.json").exists()
+
+
+def test_agent_sessions_prints_current_work_sessions(tmp_path):
+    runner = CliRunner()
+    ticket_dir = tmp_path / ".agents" / "build-tickets" / "phase-15"
+    ticket_dir.mkdir(parents=True)
+    (ticket_dir / "TKT-P15-001-session.md").write_text("# TKT-P15-001 Session", encoding="utf-8")
+    runner.invoke(
+        cli.app,
+        [
+            "agent",
+            "session",
+            "TKT-P15-001",
+            "--event",
+            "started",
+            "--note",
+            "Working.",
+            "--root",
+            str(tmp_path),
+        ],
+    )
+
+    result = runner.invoke(cli.app, ["agent", "sessions", "--root", str(tmp_path), "--phase", "phase-15"])
+
+    assert result.exit_code == 0
+    assert "Agent Work Sessions" in result.output
+    assert "Started: 1" in result.output
+    assert "TKT-P15-001" in result.output
+
+
+def test_agent_session_history_prints_events(tmp_path):
+    runner = CliRunner()
+    ticket_dir = tmp_path / ".agents" / "build-tickets" / "phase-15"
+    ticket_dir.mkdir(parents=True)
+    (ticket_dir / "TKT-P15-001-session.md").write_text("# TKT-P15-001 Session", encoding="utf-8")
+    runner.invoke(
+        cli.app,
+        [
+            "agent",
+            "session",
+            "TKT-P15-001",
+            "--event",
+            "finished",
+            "--note",
+            "Done.",
+            "--root",
+            str(tmp_path),
+        ],
+    )
+
+    result = runner.invoke(cli.app, ["agent", "session-history", "--root", str(tmp_path)])
+
+    assert result.exit_code == 0
+    assert "Agent Work Session History" in result.output
+    assert "Events: 1" in result.output
+    assert "TKT-P15-001" in result.output
+
+
+def test_agent_reconcile_prints_session_report_warnings(tmp_path):
+    runner = CliRunner()
+    ticket_dir = tmp_path / ".agents" / "build-tickets" / "phase-17"
+    ticket_dir.mkdir(parents=True)
+    (ticket_dir / "TKT-P17-001-reconcile.md").write_text("# TKT-P17-001 Reconcile", encoding="utf-8")
+    runner.invoke(
+        cli.app,
+        [
+            "agent",
+            "session",
+            "TKT-P17-001",
+            "--event",
+            "finished",
+            "--note",
+            "Done.",
+            "--root",
+            str(tmp_path),
+        ],
+    )
+
+    result = runner.invoke(cli.app, ["agent", "reconcile", "--root", str(tmp_path), "--phase", "phase-17"])
+
+    assert result.exit_code == 0
+    assert "Agent Session Report Reconciliation" in result.output
+    assert "Warnings: 1" in result.output
+    assert "finished-session-unreported" in result.output
+
+
+def test_agent_reconcile_can_fail_on_warning(tmp_path):
+    runner = CliRunner()
+    ticket_dir = tmp_path / ".agents" / "build-tickets" / "phase-17"
+    ticket_dir.mkdir(parents=True)
+    (ticket_dir / "TKT-P17-001-reconcile.md").write_text("# TKT-P17-001 Reconcile", encoding="utf-8")
+    runner.invoke(
+        cli.app,
+        [
+            "agent",
+            "session",
+            "TKT-P17-001",
+            "--event",
+            "finished",
+            "--note",
+            "Done.",
+            "--root",
+            str(tmp_path),
+        ],
+    )
+
+    result = runner.invoke(
+        cli.app,
+        ["agent", "reconcile", "--root", str(tmp_path), "--phase", "phase-17", "--fail-on-warning"],
+    )
+
+    assert result.exit_code == 1
+    assert "finished-session-unreported" in result.output
+
+
+def test_agent_session_archive_previews_candidates(tmp_path):
+    runner = CliRunner()
+    ticket_dir = tmp_path / ".agents" / "build-tickets" / "phase-19"
+    ticket_dir.mkdir(parents=True)
+    ticket_path = ticket_dir / "TKT-P19-001-archive.md"
+    ticket_path.write_text("# TKT-P19-001 Archive", encoding="utf-8")
+    runner.invoke(
+        cli.app,
+        [
+            "agent",
+            "session",
+            "TKT-P19-001",
+            "--event",
+            "finished",
+            "--note",
+            "Done.",
+            "--root",
+            str(tmp_path),
+        ],
+    )
+    runner.invoke(
+        cli.app,
+        [
+            "agent",
+            "report",
+            "TKT-P19-001",
+            "--summary",
+            "Done.",
+            "--root",
+            str(tmp_path),
+        ],
+    )
+
+    result = runner.invoke(cli.app, ["agent", "session-archive", "--root", str(tmp_path), "--phase", "phase-19"])
+
+    assert result.exit_code == 0
+    assert "Agent Session Archive" in result.output
+    assert "Mode: preview" in result.output
+    assert "Archive candidates: 1" in result.output
+    assert "TKT-P19-001" in result.output
+
+
+def test_agent_session_archive_write_removes_current_session(tmp_path):
+    runner = CliRunner()
+    ticket_dir = tmp_path / ".agents" / "build-tickets" / "phase-19"
+    ticket_dir.mkdir(parents=True)
+    ticket_path = ticket_dir / "TKT-P19-001-archive.md"
+    ticket_path.write_text("# TKT-P19-001 Archive", encoding="utf-8")
+    runner.invoke(
+        cli.app,
+        [
+            "agent",
+            "session",
+            "TKT-P19-001",
+            "--event",
+            "finished",
+            "--note",
+            "Done.",
+            "--root",
+            str(tmp_path),
+        ],
+    )
+    runner.invoke(
+        cli.app,
+        [
+            "agent",
+            "report",
+            "TKT-P19-001",
+            "--summary",
+            "Done.",
+            "--root",
+            str(tmp_path),
+        ],
+    )
+
+    result = runner.invoke(cli.app, ["agent", "session-archive", "--root", str(tmp_path), "--phase", "phase-19", "--write"])
+    sessions = runner.invoke(cli.app, ["agent", "sessions", "--root", str(tmp_path), "--phase", "phase-19"])
+
+    assert result.exit_code == 0
+    assert "Mode: write" in result.output
+    assert "Archive candidates: 1" in result.output
+    assert "TKT-P19-001" in (tmp_path / ".agents" / "execution" / "archived-work-sessions.jsonl").read_text(encoding="utf-8")
+    assert "| none | none | none | none | none |" in sessions.output
+
+
+def test_agent_autopilot_previews_next_ticket(tmp_path):
+    runner = CliRunner()
+    ticket_dir = tmp_path / ".agents" / "build-tickets" / "phase-18"
+    ticket_dir.mkdir(parents=True)
+    (ticket_dir / "TKT-P18-001-autopilot.md").write_text("# TKT-P18-001 Autopilot", encoding="utf-8")
+    runner.invoke(
+        cli.app,
+        [
+            "agent",
+            "decide",
+            "TKT-P18-001",
+            "--decision",
+            "accepted",
+            "--reason",
+            "Ready.",
+            "--root",
+            str(tmp_path),
+        ],
+    )
+
+    result = runner.invoke(cli.app, ["agent", "autopilot", "--root", str(tmp_path), "--phase", "phase-18"])
+
+    assert result.exit_code == 0
+    assert "Agent Autopilot" in result.output
+    assert "Mode: preview" in result.output
+    assert "TKT-P18-001" in result.output
+    assert not (tmp_path / ".agents" / "execution" / "TKT-P18-001.execution.md").exists()
+
+
+def test_agent_autopilot_execute_writes_packet_and_starts_session(tmp_path):
+    runner = CliRunner()
+    ticket_dir = tmp_path / ".agents" / "build-tickets" / "phase-18"
+    ticket_dir.mkdir(parents=True)
+    (ticket_dir / "TKT-P18-001-autopilot.md").write_text("# TKT-P18-001 Autopilot", encoding="utf-8")
+    runner.invoke(
+        cli.app,
+        [
+            "agent",
+            "decide",
+            "TKT-P18-001",
+            "--decision",
+            "accepted",
+            "--reason",
+            "Ready.",
+            "--root",
+            str(tmp_path),
+        ],
+    )
+
+    result = runner.invoke(
+        cli.app,
+        ["agent", "autopilot", "--root", str(tmp_path), "--phase", "phase-18", "--execute", "--start-session"],
+    )
+
+    assert result.exit_code == 0
+    assert "Mode: execute" in result.output
+    assert "Session events: picked-up, started" in result.output
+    assert (tmp_path / ".agents" / "execution" / "TKT-P18-001.execution.md").exists()
+
+
+def test_agent_autopilot_stops_on_reconciliation_warning(tmp_path):
+    runner = CliRunner()
+    ticket_dir = tmp_path / ".agents" / "build-tickets" / "phase-18"
+    ticket_dir.mkdir(parents=True)
+    (ticket_dir / "TKT-P18-001-autopilot.md").write_text("# TKT-P18-001 Autopilot", encoding="utf-8")
+    runner.invoke(
+        cli.app,
+        [
+            "agent",
+            "decide",
+            "TKT-P18-001",
+            "--decision",
+            "accepted",
+            "--reason",
+            "Ready.",
+            "--root",
+            str(tmp_path),
+        ],
+    )
+    runner.invoke(
+        cli.app,
+        [
+            "agent",
+            "session",
+            "TKT-P18-001",
+            "--event",
+            "finished",
+            "--note",
+            "Needs report.",
+            "--root",
+            str(tmp_path),
+        ],
+    )
+
+    result = runner.invoke(cli.app, ["agent", "autopilot", "--root", str(tmp_path), "--phase", "phase-18"])
+
+    assert result.exit_code == 0
+    assert "Reconciliation warnings must be resolved" in result.output
+    assert "Reconciliation warnings: 1" in result.output
+
+
+def test_agent_autopilot_stops_on_active_session_by_default(tmp_path):
+    runner = CliRunner()
+    ticket_dir = tmp_path / ".agents" / "build-tickets" / "phase-18"
+    ticket_dir.mkdir(parents=True)
+    (ticket_dir / "TKT-P18-001-autopilot.md").write_text("# TKT-P18-001 Autopilot", encoding="utf-8")
+    (ticket_dir / "TKT-P18-002-next.md").write_text("# TKT-P18-002 Next", encoding="utf-8")
+    for ticket_id in ("TKT-P18-001", "TKT-P18-002"):
+        runner.invoke(
+            cli.app,
+            [
+                "agent",
+                "decide",
+                ticket_id,
+                "--decision",
+                "accepted",
+                "--reason",
+                "Ready.",
+                "--root",
+                str(tmp_path),
+            ],
+        )
+    runner.invoke(
+        cli.app,
+        [
+            "agent",
+            "session",
+            "TKT-P18-001",
+            "--event",
+            "started",
+            "--note",
+            "Working.",
+            "--root",
+            str(tmp_path),
+        ],
+    )
+
+    result = runner.invoke(cli.app, ["agent", "autopilot", "--root", str(tmp_path), "--phase", "phase-18"])
+
+    assert result.exit_code == 0
+    assert "Active work session" in result.output
+    assert "Ticket: -" in result.output
 
 
 def test_doctor_reports_missing_continue_extension(monkeypatch):

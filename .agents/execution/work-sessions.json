@@ -1,0 +1,40 @@
+{
+  "sessions": [
+    {
+      "note": "Implementation complete; validation pending reports.",
+      "packet_path": ".agents/execution/TKT-P15-001.execution.md",
+      "phase": "phase-15",
+      "sequence": 3,
+      "status": "finished",
+      "ticket_id": "TKT-P15-001",
+      "ticket_path": ".agents/build-tickets/phase-15/TKT-P15-001-work-session-event-model.md"
+    },
+    {
+      "note": "Session-aware policy implementation completed; report pending.",
+      "packet_path": ".agents/execution/TKT-P16-001.execution.md",
+      "phase": "phase-16",
+      "sequence": 4,
+      "status": "finished",
+      "ticket_id": "TKT-P16-001",
+      "ticket_path": ".agents/build-tickets/phase-16/TKT-P16-001-session-aware-selector-policy.md"
+    },
+    {
+      "note": "Active session used to test resume policy.",
+      "packet_path": null,
+      "phase": "phase-16",
+      "sequence": 5,
+      "status": "started",
+      "ticket_id": "TKT-P16-002",
+      "ticket_path": ".agents/build-tickets/phase-16/TKT-P16-002-session-state-rendering.md"
+    },
+    {
+      "note": "Reconciliation implementation completed; report pending.",
+      "packet_path": ".agents/execution/TKT-P17-001.execution.md",
+      "phase": "phase-17",
+      "sequence": 6,
+      "status": "finished",
+      "ticket_id": "TKT-P17-001",
+      "ticket_path": ".agents/build-tickets/phase-17/TKT-P17-001-reconciliation-warning-model.md"
+    }
+  ]
+}

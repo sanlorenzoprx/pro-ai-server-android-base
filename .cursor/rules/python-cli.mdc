@@ -1,0 +1,17 @@
+---
+description: Python CLI implementation rules
+globs:
+  - "src/**/*.py"
+  - "tests/**/*.py"
+alwaysApply: false
+---
+
+# Python CLI Rules
+
+- Follow existing Typer and Rich patterns in `src/pro_ai_server/cli.py`.
+- Keep pure planning/parsing logic in small modules outside the CLI when practical.
+- Prefer dataclasses for structured command plans and reports.
+- Use deterministic output in tests.
+- Handle missing external tools gracefully.
+- Avoid requiring a real phone, ADB server, Ollama server, or IDE in unit tests.
+

@@ -7,6 +7,63 @@ import typer
 from rich.console import Console
 
 from pro_ai_server.adb import select_adb_device_from_output
+from pro_ai_server.agent.context import build_agent_context
+from pro_ai_server.agent.autopilot import render_autopilot_result, run_autopilot_once
+from pro_ai_server.agent.execution import (
+    build_execution_packet,
+    render_execution_packet,
+    render_next_action,
+    select_next_action,
+    write_execution_packet,
+)
+from pro_ai_server.agent.handoff import build_handoff_view, render_handoff_view
+from pro_ai_server.agent.improver import (
+    build_self_improvement_review,
+    render_self_improvement_review,
+    write_self_improvement_review,
+)
+from pro_ai_server.agent.planner import build_plan_draft, write_plan
+from pro_ai_server.agent.prime import build_prime_report, write_prime_report
+from pro_ai_server.agent.queue import (
+    build_decision_queue,
+    default_decision_ledger_path,
+    load_decision_events,
+    record_decision,
+    render_decision_history,
+    render_decision_queue,
+)
+from pro_ai_server.agent.reporter import (
+    build_implementation_report,
+    build_ticket_status,
+    discover_tickets,
+    render_ticket_status,
+    write_implementation_report,
+)
+from pro_ai_server.agent.reconciliation import (
+    build_session_report_reconciliation,
+    render_session_report_reconciliation,
+)
+from pro_ai_server.agent.session_archive import (
+    apply_session_archive_plan,
+    build_session_archive_plan,
+    render_session_archive_plan,
+)
+from pro_ai_server.agent.sessions import (
+    build_work_sessions,
+    default_session_ledger_path,
+    load_session_events,
+    record_session_event,
+    render_session_history,
+    render_work_sessions,
+)
+from pro_ai_server.agent.ticketizer import (
+    build_ticket_drafts,
+    extract_recommendations,
+    next_ticket_number,
+    render_ticketize_preview,
+    select_accepted_recommendations,
+    write_ticket_drafts,
+)
 from pro_ai_server.continue_config import exposure_warnings, write_continue_config
 from pro_ai_server.device_scan import (
     DeviceScanOutputs,
@@ -15,6 +72,13 @@ from pro_ai_server.device_scan import (
     build_device_scan_summary_lines,
 )
 from pro_ai_server.diagnostics import build_diagnostics_report, write_diagnostics_report
+from pro_ai_server.gateway.app import build_route_test_response
+from pro_ai_server.gateway.config import load_gateway_config
+from pro_ai_server.gateway.inventory import assess_gateway_model_inventory
+from pro_ai_server.gateway.ollama_client import OllamaProxyError, proxy_ollama_json
+from pro_ai_server.gateway.router import build_default_route_catalog, select_route
+from pro_ai_server.gateway.server import GatewayStatusError, fetch_gateway_health, serve_gateway
+from pro_ai_server.gateway.settings import GatewaySettings
 from pro_ai_server.ide import detect_ide_clis
 from pro_ai_server.ide import detect_continue_extension_status
 from pro_ai_server.ide import install_continue_extension
@@ -22,6 +86,10 @@ from pro_ai_server.ide import installed_ide_clis
 from pro_ai_server.models import model_plan_for_profile, model_plan_for_ram
 from pro_ai_server.ollama import assess_model_inventory, assess_ollama_server_status, build_ollama_tags_command
 from pro_ai_server.packaging import validate_windows_platform_tools_layouts
+from pro_ai_server.rag.context import build_context
+from pro_ai_server.rag.indexer import DEFAULT_INDEX_PATH, index_project
+from pro_ai_server.rag.search import search_index
+from pro_ai_server.rag.store import IndexStore
 from pro_ai_server.release_validation import validate_release_layout
 from pro_ai_server.script_delivery import build_script_delivery_plan
 from pro_ai_server.setup_receipt import build_setup_receipt, render_setup_receipt
@@ -38,6 +106,8 @@ from pro_ai_server.tailscale import tailscale_android_installed
 from pro_ai_server.tailscale import tailscale_host_installed
 
 app = typer.Typer(help="Pro AI Server: Android phone local AI server manager.")
+agent_app = typer.Typer(help="Agentic CodeFlow workflow commands.")
+app.add_typer(agent_app, name="agent")
 console = Console()
 
 
@@ -401,6 +471,644 @@ def server_check(
         console.print(f"Next: {instruction}")
     if not inventory.ok:
         raise typer.Exit(code=1)
+
+
+@app.command("gateway-start")
+def gateway_start(
+    host: str = typer.Option("127.0.0.1", help="Gateway bind host. Defaults to loopback."),
+    port: int = typer.Option(8765, help="Gateway bind port."),
+    ollama_api_base: str = typer.Option("http://localhost:11434", help="Ollama API base URL."),
+    timeout_seconds: float = typer.Option(30.0, help="Gateway upstream/status timeout in seconds."),
+    model_profile: str = typer.Option("professional", "--model-profile", help="Default model profile."),
+    chat_model: str | None = typer.Option(None, help="Optional chat model override."),
+    autocomplete_model: str | None = typer.Option(None, help="Optional autocomplete model override."),
+) -> None:
+    """Start the local Pro CodeFlow gateway."""
+    try:
+        settings = GatewaySettings(
+            host=host,
+            port=port,
+            ollama_api_base=ollama_api_base,
+            timeout_seconds=timeout_seconds,
+            model_profile=model_profile,
+            chat_model=chat_model,
+            autocomplete_model=autocomplete_model,
+        )
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    console.print(f"[green]Starting Pro CodeFlow gateway:[/green] {settings.bind_url}")
+    console.print(f"Ollama API base: {settings.ollama_api_base}")
+    console.print(f"Model profile: {settings.model_profile}")
+    try:
+        serve_gateway(settings)
+    except KeyboardInterrupt:
+        console.print("Gateway stopped.")
+    except OSError as exc:
+        console.print(f"[red]Gateway failed to start:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+
+
+@app.command("gateway-status")
+def gateway_status(
+    host: str = typer.Option("127.0.0.1", help="Gateway host."),
+    port: int = typer.Option(8765, help="Gateway port."),
+    timeout_seconds: float = typer.Option(5.0, help="Gateway status timeout in seconds."),
+) -> None:
+    """Check the local Pro CodeFlow gateway health endpoint."""
+    try:
+        settings = GatewaySettings(host=host, port=port, timeout_seconds=timeout_seconds)
+        health = fetch_gateway_health(settings)
+    except (GatewayStatusError, ValueError) as exc:
+        console.print("[red]Gateway is not ready.[/red]")
+        console.print(str(exc))
+        raise typer.Exit(code=1) from exc
+
+    status = health.get("status", "unknown")
+    if status == "ok":
+        console.print(f"[green]OK[/green] Gateway ready at {settings.bind_url}")
+    else:
+        console.print(f"[yellow]Gateway status:[/yellow] {status}")
+    console.print(f"Service: {health.get('service', 'unknown')}")
+    console.print(f"Version: {health.get('version', 'unknown')}")
+
+
+@app.command("gateway-route-test")
+def gateway_route_test(
+    task: str = typer.Option("chat", help="Task type to route: chat, autocomplete, refactor, test_generation."),
+    prompt: str | None = typer.Option(None, help="Optional prompt sample for route testing."),
+    config: Path | None = typer.Option(None, help="Optional gateway config YAML path."),
+    model_profile: str | None = typer.Option(None, "--model-profile", help="Override default model profile."),
+    chat_model: str | None = typer.Option(None, help="Optional chat model override."),
+    autocomplete_model: str | None = typer.Option(None, help="Optional autocomplete model override."),
+) -> None:
+    """Show which model route the gateway would choose for a task."""
+    try:
+        settings = _gateway_settings_from_cli_options(
+            config=config,
+            model_profile=model_profile,
+            chat_model=chat_model,
+            autocomplete_model=autocomplete_model,
+        )
+        response = build_route_test_response(task, prompt=prompt, settings=settings)
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    fallback_note = " (fallback)" if response.used_fallback else ""
+    console.print(f"Task: {response.requested_task}{fallback_note}")
+    console.print(f"Route: {response.route.task}")
+    console.print(f"Profile: {response.route.profile}")
+    console.print(f"Model: {response.route.model}")
+    if response.route.fallback_model:
+        console.print(f"Fallback model: {response.route.fallback_model}")
+    console.print(f"Prompt received: {'yes' if response.prompt_received else 'no'}")
+
+
+@app.command("gateway-proxy-test")
+def gateway_proxy_test(
+    task: str = typer.Option("chat", help="Task type to check."),
+    all_routes: bool = typer.Option(False, "--all", help="Check all configured routes."),
+    config: Path | None = typer.Option(None, help="Optional gateway config YAML path."),
+    ollama_api_base: str | None = typer.Option(None, help="Override Ollama API base URL."),
+    model_profile: str | None = typer.Option(None, "--model-profile", help="Override model profile."),
+    chat_model: str | None = typer.Option(None, help="Optional chat model override."),
+    autocomplete_model: str | None = typer.Option(None, help="Optional autocomplete model override."),
+) -> None:
+    """Check configured gateway route models against Ollama /api/tags."""
+    try:
+        settings = _gateway_settings_from_cli_options(
+            config=config,
+            ollama_api_base=ollama_api_base,
+            model_profile=model_profile,
+            chat_model=chat_model,
+            autocomplete_model=autocomplete_model,
+        )
+        tags = proxy_ollama_json("GET", "/api/tags", settings=settings).payload
+    except (ValueError, OllamaProxyError) as exc:
+        console.print("[red]Gateway proxy test failed.[/red]")
+        console.print(str(exc))
+        raise typer.Exit(code=1) from exc
+
+    routes = build_default_route_catalog(settings)
+    selected_routes = routes if all_routes else {select_route(task, settings=settings).route.task: select_route(task, settings=settings).route}
+    inventory = assess_gateway_model_inventory(selected_routes, tags)
+
+    console.print(f"Ollama API: {settings.ollama_api_base}")
+    for route in selected_routes.values():
+        console.print(f"Route {route.task}: {route.model}")
+        if route.fallback_model:
+            console.print(f"  Fallback: {route.fallback_model}")
+    if inventory.ok:
+        console.print("[green]OK[/green] All checked route models are available.")
+        return
+
+    console.print("[yellow]Missing models:[/yellow]")
+    for model in inventory.missing_models:
+        console.print(f"  {model}")
+        console.print(f"  Next: ollama pull {model}")
+    raise typer.Exit(code=1)
+
+
+@app.command("index")
+def index_codebase(
+    root: Path = typer.Argument(Path("."), help="Project root to index."),
+    db: Path = typer.Option(DEFAULT_INDEX_PATH, help="SQLite index path."),
+) -> None:
+    """Index a codebase for local keyword search."""
+    result = index_project(root, db_path=db)
+    console.print(f"Index DB: {result.db_path}")
+    console.print(f"Indexed files: {result.file_count}")
+    console.print(f"Indexed chunks: {result.chunk_count}")
+
+
+@app.command("index-status")
+def index_status(db: Path = typer.Option(DEFAULT_INDEX_PATH, help="SQLite index path.")) -> None:
+    """Show local code index status."""
+    store = IndexStore(db)
+    try:
+        status = store.status()
+    except Exception as exc:  # noqa: BLE001 - CLI should show a friendly status failure.
+        console.print("[red]Index is not ready.[/red]")
+        console.print(str(exc))
+        raise typer.Exit(code=1) from exc
+    console.print(f"Index DB: {db}")
+    console.print(f"Indexed files: {status.file_count}")
+    console.print(f"Indexed chunks: {status.chunk_count}")
+
+
+@app.command("search")
+def search_codebase(
+    query: str = typer.Argument(..., help="Search query."),
+    db: Path = typer.Option(DEFAULT_INDEX_PATH, help="SQLite index path."),
+    limit: int = typer.Option(5, help="Maximum results."),
+) -> None:
+    """Search the local code index."""
+    for result in search_index(query, db_path=db, limit=limit):
+        console.print(f"{result.path.as_posix()}#{result.chunk_index} score={result.score}")
+        console.print(result.text)
+
+
+@app.command("context")
+def context_codebase(
+    query: str = typer.Argument(..., help="Context query."),
+    db: Path = typer.Option(DEFAULT_INDEX_PATH, help="SQLite index path."),
+    limit: int = typer.Option(5, help="Maximum chunks."),
+    max_chars: int = typer.Option(12000, help="Maximum context characters."),
+) -> None:
+    """Build deterministic prompt context from the local code index."""
+    console.print(build_context(query, db_path=db, limit=limit, max_chars=max_chars))
+
+
+@agent_app.command("prime")
+def agent_prime(
+    root: Path = typer.Option(Path("."), help="Repository root."),
+    db: Path = typer.Option(DEFAULT_INDEX_PATH, help="SQLite index path."),
+) -> None:
+    """Write an agent prime report with git and index status."""
+    store = IndexStore(db)
+    try:
+        status = store.status()
+        file_count = status.file_count
+        chunk_count = status.chunk_count
+    except Exception:  # noqa: BLE001 - prime should still work before indexing.
+        file_count = None
+        chunk_count = None
+    report = build_prime_report(index_file_count=file_count, index_chunk_count=chunk_count)
+    path = write_prime_report(report, root=root)
+    console.print(f"Wrote agent prime: {path}")
+
+
+@agent_app.command("context")
+def agent_context(
+    query: str = typer.Argument(..., help="Context query."),
+    root: Path = typer.Option(Path("."), help="Repository root."),
+    db: Path = typer.Option(DEFAULT_INDEX_PATH, help="SQLite index path."),
+    limit: int = typer.Option(5, help="Maximum chunks."),
+    max_chars: int = typer.Option(12000, help="Maximum context characters."),
+) -> None:
+    """Build agent-ready context using project memory and the local index."""
+    console.print(build_agent_context(query, root=root, db_path=db, limit=limit, max_chars=max_chars))
+
+
+@agent_app.command("plan")
+def agent_plan(
+    feature: str = typer.Argument(..., help="Feature or change request to plan."),
+    root: Path = typer.Option(Path("."), help="Repository root."),
+    db: Path = typer.Option(DEFAULT_INDEX_PATH, help="SQLite index path."),
+    limit: int = typer.Option(5, help="Maximum context chunks."),
+    max_chars: int = typer.Option(12000, help="Maximum indexed context characters."),
+    slug: str | None = typer.Option(None, help="Optional filename-safe plan slug."),
+) -> None:
+    """Create a draft implementation plan from memory, prime, and indexed context."""
+    project_memory = _read_optional_text(root / ".agents" / "memory" / "project-memory.md")
+    prime_report = _read_optional_text(root / ".agents" / "memory" / "last-prime.md")
+    indexed_context = build_agent_context(feature, root=root, db_path=db, limit=limit, max_chars=max_chars)
+    plan = build_plan_draft(
+        feature,
+        project_memory=project_memory,
+        prime_report=prime_report,
+        indexed_context=indexed_context,
+    )
+    try:
+        path = write_plan(plan, feature, root=root, slug=slug)
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+    console.print(f"Wrote agent plan: {path}")
+
+
+@agent_app.command("report")
+def agent_report(
+    ticket_id: str = typer.Argument(..., help="Ticket ID to report, for example TKT-P8-001."),
+    summary: str = typer.Option(..., "--summary", help="Implementation summary."),
+    root: Path = typer.Option(Path("."), help="Repository root."),
+    slug: str | None = typer.Option(None, help="Optional filename-safe report slug."),
+    file_created: list[str] | None = typer.Option(None, "--file-created", help="Created file path. Repeatable."),
+    file_updated: list[str] | None = typer.Option(None, "--file-updated", help="Updated file path. Repeatable."),
+    validation: list[str] | None = typer.Option(None, "--validation", help="Validation evidence. Repeatable."),
+    deviation: list[str] | None = typer.Option(None, "--deviation", help="Deviation note. Repeatable."),
+    follow_up: list[str] | None = typer.Option(None, "--follow-up", help="Follow-up note. Repeatable."),
+) -> None:
+    """Write a deterministic ticket implementation report."""
+    ticket_path = next((ticket.path for ticket in discover_tickets(root) if ticket.ticket_id == ticket_id.upper()), None)
+    report = build_implementation_report(
+        ticket_id,
+        summary=summary,
+        ticket_path=ticket_path,
+        files_created=tuple(file_created or ()),
+        files_updated=tuple(file_updated or ()),
+        validation=tuple(validation or ()),
+        deviations=tuple(deviation or ()),
+        follow_up=tuple(follow_up or ()),
+    )
+    try:
+        path = write_implementation_report(ticket_id, report, root=root, slug=slug)
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+    console.print(f"Wrote implementation report: {path}")
+
+
+@agent_app.command("status")
+def agent_status(
+    root: Path = typer.Option(Path("."), help="Repository root."),
+    phase: str | None = typer.Option(None, "--phase", help="Optional phase directory filter, for example phase-8."),
+) -> None:
+    """Show ticket status derived from build tickets and reports."""
+    console.print(render_ticket_status(build_ticket_status(root, phase=phase)))
+
+
+@agent_app.command("improve")
+def agent_improve(
+    root: Path = typer.Option(Path("."), help="Repository root."),
+    phase: str | None = typer.Option(None, "--phase", help="Optional phase directory filter, for example phase-9."),
+    write: bool = typer.Option(False, "--write", help="Write the review under .agents/reports."),
+    output: Path | None = typer.Option(None, "--output", help="Optional output path used with --write."),
+) -> None:
+    """Review tickets, reports, validation, and mistakes for process improvements."""
+    review = build_self_improvement_review(root, phase=phase)
+    rendered = render_self_improvement_review(review)
+    if write:
+        path = write_self_improvement_review(review, root=root, output=output)
+        console.print(f"Wrote self-improvement review: {path}")
+        return
+    console.print(rendered)
+
+
+@agent_app.command("ticketize")
+def agent_ticketize(
+    root: Path = typer.Option(Path("."), help="Repository root."),
+    review: Path | None = typer.Option(None, "--review", help="Self-improvement review path."),
+    accept: list[str] | None = typer.Option(None, "--accept", help="Accepted recommendation text. Repeatable."),
+    all_recommendations: bool = typer.Option(False, "--all", help="Ticketize all recommendations from the review."),
+    phase: str = typer.Option("phase-10", "--phase", help="Target build-ticket phase directory."),
+    ticket_prefix: str = typer.Option("TKT-P10", "--ticket-prefix", help="Ticket ID prefix, for example TKT-P10."),
+    start: int = typer.Option(0, "--start", help="Starting ticket number. Defaults to next available in phase."),
+    write: bool = typer.Option(False, "--write", help="Write ticket drafts. Defaults to preview only."),
+    force: bool = typer.Option(False, "--force", help="Overwrite existing ticket files when used with --write."),
+) -> None:
+    """Turn accepted self-improvement recommendations into build-ticket drafts."""
+    review_path = review or root / ".agents" / "reports" / "self-improvement-review.md"
+    if not review_path.exists():
+        console.print(f"[red]Self-improvement review not found:[/red] {review_path}")
+        raise typer.Exit(code=1)
+    recommendations = extract_recommendations(review_path.read_text(encoding="utf-8"))
+    selected = select_accepted_recommendations(
+        recommendations,
+        accepted=tuple(accept or ()),
+        include_all=all_recommendations,
+    )
+    start_number = start if start > 0 else next_ticket_number(root, phase=phase, ticket_prefix=ticket_prefix)
+    drafts = build_ticket_drafts(selected, root=root, phase=phase, ticket_prefix=ticket_prefix, start=start_number)
+    if write:
+        try:
+            paths = write_ticket_drafts(drafts, force=force)
+        except FileExistsError as exc:
+            console.print(f"[red]{exc}[/red]")
+            raise typer.Exit(code=1) from exc
+        console.print(f"Wrote {len(paths)} ticket draft(s).")
+        for path in paths:
+            console.print(str(path))
+        return
+    console.print(render_ticketize_preview(drafts))
+
+
+@agent_app.command("decide")
+def agent_decide(
+    ticket_id: str = typer.Argument(..., help="Ticket ID to decide, for example TKT-P10-006."),
+    decision: str = typer.Option(..., "--decision", help="Decision: accepted, deferred, or rejected."),
+    reason: str = typer.Option(..., "--reason", help="Reason for the decision."),
+    root: Path = typer.Option(Path("."), help="Repository root."),
+    queue: Path | None = typer.Option(None, "--queue", help="Optional decision queue JSON path."),
+    ledger: Path | None = typer.Option(None, "--ledger", help="Optional append-only decision ledger JSONL path."),
+) -> None:
+    """Record a local accepted/deferred/rejected ticket decision."""
+    try:
+        record = record_decision(ticket_id, decision=decision, reason=reason, root=root, path=queue, ledger_path=ledger)
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+    console.print(f"Recorded {record.decision} decision for {record.ticket_id}.")
+
+
+@agent_app.command("queue")
+def agent_queue(
+    root: Path = typer.Option(Path("."), help="Repository root."),
+    phase: str | None = typer.Option(None, "--phase", help="Optional phase directory filter, for example phase-11."),
+    queue: Path | None = typer.Option(None, "--queue", help="Optional decision queue JSON path."),
+) -> None:
+    """Show local accepted/deferred/rejected ticket decisions."""
+    console.print(render_decision_queue(build_decision_queue(root, phase=phase, path=queue)))
+
+
+@agent_app.command("history")
+def agent_history(
+    root: Path = typer.Option(Path("."), help="Repository root."),
+    ledger: Path | None = typer.Option(None, "--ledger", help="Optional append-only decision ledger JSONL path."),
+) -> None:
+    """Show append-only ticket decision history."""
+    ledger_path = ledger or default_decision_ledger_path(root)
+    console.print(render_decision_history(load_decision_events(ledger_path)))
+
+
+@agent_app.command("handoff")
+def agent_handoff(
+    root: Path = typer.Option(Path("."), help="Repository root."),
+    phase: str | None = typer.Option(None, "--phase", help="Optional phase directory filter, for example phase-13."),
+    ticket_id: str | None = typer.Option(None, "--ticket", help="Optional ticket ID filter."),
+    include_reported: bool = typer.Option(False, "--include-reported", help="Include accepted tickets that already have reports."),
+    queue: Path | None = typer.Option(None, "--queue", help="Optional decision queue JSON path."),
+) -> None:
+    """Show accepted tickets ready for implementation handoff."""
+    view = build_handoff_view(
+        root,
+        phase=phase,
+        ticket_id=ticket_id,
+        include_reported=include_reported,
+        queue_path=queue,
+    )
+    console.print(render_handoff_view(view))
+
+
+@agent_app.command("next-action")
+def agent_next_action(
+    root: Path = typer.Option(Path("."), help="Repository root."),
+    phase: str | None = typer.Option(None, "--phase", help="Optional phase directory filter, for example phase-14."),
+    ticket_id: str | None = typer.Option(None, "--ticket", help="Optional ticket ID filter."),
+    queue: Path | None = typer.Option(None, "--queue", help="Optional decision queue JSON path."),
+    session_file: Path | None = typer.Option(None, "--session-file", help="Optional current-state session JSON path."),
+    session_policy: str = typer.Option("available", "--session-policy", help="Session policy: available, resume, or all."),
+) -> None:
+    """Select the next accepted unreported ticket ready for execution."""
+    try:
+        selection = select_next_action(
+            root,
+            phase=phase,
+            ticket_id=ticket_id,
+            queue_path=queue,
+            session_path=session_file,
+            session_policy=session_policy,
+        )
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+    console.print(render_next_action(selection))
+
+
+@agent_app.command("packet")
+def agent_packet(
+    root: Path = typer.Option(Path("."), help="Repository root."),
+    phase: str | None = typer.Option(None, "--phase", help="Optional phase directory filter, for example phase-14."),
+    ticket_id: str | None = typer.Option(None, "--ticket", help="Optional ticket ID filter."),
+    queue: Path | None = typer.Option(None, "--queue", help="Optional decision queue JSON path."),
+    session_file: Path | None = typer.Option(None, "--session-file", help="Optional current-state session JSON path."),
+    session_policy: str = typer.Option("available", "--session-policy", help="Session policy: available, resume, or all."),
+    include_context: bool = typer.Option(False, "--context", help="Include indexed agent context for the selected ticket."),
+    db: Path = typer.Option(DEFAULT_INDEX_PATH, help="SQLite index path used with --context."),
+    limit: int = typer.Option(5, help="Maximum context chunks used with --context."),
+    max_chars: int = typer.Option(12000, help="Maximum indexed context characters used with --context."),
+    write: bool = typer.Option(False, "--write", help="Write the execution packet under .agents/execution."),
+    output: Path | None = typer.Option(None, "--output", help="Optional output path used with --write."),
+) -> None:
+    """Render or write a focused execution packet for the next ready ticket."""
+    try:
+        selection = select_next_action(
+            root,
+            phase=phase,
+            ticket_id=ticket_id,
+            queue_path=queue,
+            session_path=session_file,
+            session_policy=session_policy,
+        )
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+    indexed_context = ""
+    if selection.item and include_context:
+        indexed_context = build_agent_context(
+            f"{selection.item.ticket_id} {selection.item.title}",
+            root=root,
+            db_path=db,
+            limit=limit,
+            max_chars=max_chars,
+        )
+    packet = build_execution_packet(
+        root,
+        phase=phase,
+        ticket_id=ticket_id,
+        queue_path=queue,
+        session_path=session_file,
+        session_policy=session_policy,
+        indexed_context=indexed_context,
+    )
+    rendered = render_execution_packet(packet)
+    if write:
+        if packet is None:
+            console.print(rendered)
+            raise typer.Exit(code=1)
+        path = write_execution_packet(packet, root=root, output=output)
+        console.print(f"Wrote execution packet: {path}")
+        return
+    console.print(rendered)
+
+
+@agent_app.command("session")
+def agent_session(
+    ticket_id: str = typer.Argument(..., help="Ticket ID to mark, for example TKT-P15-001."),
+    event: str = typer.Option(..., "--event", help="Event: picked-up, started, or finished."),
+    note: str = typer.Option("", "--note", help="Optional session note."),
+    root: Path = typer.Option(Path("."), help="Repository root."),
+    session_file: Path | None = typer.Option(None, "--session-file", help="Optional current-state session JSON path."),
+    ledger: Path | None = typer.Option(None, "--ledger", help="Optional append-only session ledger JSONL path."),
+    packet: Path | None = typer.Option(None, "--packet", help="Optional execution packet path."),
+) -> None:
+    """Record a work-session event for an execution packet."""
+    try:
+        session = record_session_event(
+            ticket_id,
+            event=event,
+            note=note,
+            root=root,
+            path=session_file,
+            ledger_path=ledger,
+            packet_path=packet,
+        )
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+    console.print(f"Recorded {session.status} session event for {session.ticket_id}.")
+
+
+@agent_app.command("sessions")
+def agent_sessions(
+    root: Path = typer.Option(Path("."), help="Repository root."),
+    phase: str | None = typer.Option(None, "--phase", help="Optional phase directory filter, for example phase-15."),
+    ticket_id: str | None = typer.Option(None, "--ticket", help="Optional ticket ID filter."),
+    session_file: Path | None = typer.Option(None, "--session-file", help="Optional current-state session JSON path."),
+) -> None:
+    """Show current work-session status for execution packets."""
+    sessions = build_work_sessions(root, phase=phase, ticket_id=ticket_id, path=session_file)
+    console.print(render_work_sessions(sessions))
+
+
+@agent_app.command("session-history")
+def agent_session_history(
+    root: Path = typer.Option(Path("."), help="Repository root."),
+    ledger: Path | None = typer.Option(None, "--ledger", help="Optional append-only session ledger JSONL path."),
+) -> None:
+    """Show append-only work-session event history."""
+    ledger_path = ledger or default_session_ledger_path(root)
+    console.print(render_session_history(load_session_events(ledger_path)))
+
+
+@agent_app.command("reconcile")
+def agent_reconcile(
+    root: Path = typer.Option(Path("."), help="Repository root."),
+    phase: str | None = typer.Option(None, "--phase", help="Optional phase directory filter, for example phase-17."),
+    ticket_id: str | None = typer.Option(None, "--ticket", help="Optional ticket ID filter."),
+    session_file: Path | None = typer.Option(None, "--session-file", help="Optional current-state session JSON path."),
+    fail_on_warning: bool = typer.Option(False, "--fail-on-warning", help="Exit nonzero when reconciliation warnings exist."),
+) -> None:
+    """Show session/report reconciliation warnings."""
+    reconciliation = build_session_report_reconciliation(
+        root,
+        phase=phase,
+        ticket_id=ticket_id,
+        session_path=session_file,
+    )
+    console.print(render_session_report_reconciliation(reconciliation))
+    if fail_on_warning and reconciliation.warning_count:
+        raise typer.Exit(code=1)
+
+
+@agent_app.command("session-archive")
+def agent_session_archive(
+    root: Path = typer.Option(Path("."), help="Repository root."),
+    phase: str | None = typer.Option(None, "--phase", help="Optional phase directory filter, for example phase-19."),
+    ticket_id: str | None = typer.Option(None, "--ticket", help="Optional ticket ID filter."),
+    session_file: Path | None = typer.Option(None, "--session-file", help="Optional current-state session JSON path."),
+    archive: Path | None = typer.Option(None, "--archive", help="Optional archive JSONL path."),
+    write: bool = typer.Option(False, "--write", help="Archive candidates. Defaults to preview only."),
+    fail_on_empty: bool = typer.Option(False, "--fail-on-empty", help="Exit nonzero when there are no archive candidates."),
+) -> None:
+    """Archive finished reported sessions out of current autopilot state."""
+    plan = build_session_archive_plan(
+        root,
+        phase=phase,
+        ticket_id=ticket_id,
+        session_path=session_file,
+        archive_path=archive,
+        write=write,
+    )
+    result = apply_session_archive_plan(plan) if write else plan
+    console.print(render_session_archive_plan(result))
+    if fail_on_empty and result.archive_count == 0:
+        raise typer.Exit(code=1)
+
+
+@agent_app.command("autopilot")
+def agent_autopilot(
+    root: Path = typer.Option(Path("."), help="Repository root."),
+    phase: str | None = typer.Option(None, "--phase", help="Optional phase directory filter, for example phase-18."),
+    ticket_id: str | None = typer.Option(None, "--ticket", help="Optional ticket ID filter."),
+    queue: Path | None = typer.Option(None, "--queue", help="Optional decision queue JSON path."),
+    session_file: Path | None = typer.Option(None, "--session-file", help="Optional current-state session JSON path."),
+    ledger: Path | None = typer.Option(None, "--ledger", help="Optional append-only session ledger JSONL path."),
+    session_policy: str = typer.Option("available", "--session-policy", help="Session policy: available, resume, or all."),
+    max_tickets: int = typer.Option(1, "--max-tickets", help="Maximum tickets for this controlled autopilot tick."),
+    execute: bool = typer.Option(False, "--execute", help="Write packet and optional session events. Defaults to preview."),
+    start_session: bool = typer.Option(False, "--start-session", help="With --execute, record picked-up and started session events."),
+    fail_on_stop: bool = typer.Option(False, "--fail-on-stop", help="Exit nonzero when autopilot stops before selecting a ticket."),
+) -> None:
+    """Run one controlled autopilot preflight and packet/session tick."""
+    try:
+        result = run_autopilot_once(
+            root,
+            phase=phase,
+            ticket_id=ticket_id,
+            queue_path=queue,
+            session_path=session_file,
+            session_ledger_path=ledger,
+            session_policy=session_policy,
+            max_tickets=max_tickets,
+            execute=execute,
+            start_session=start_session,
+        )
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+    console.print(render_autopilot_result(result))
+    if fail_on_stop and result.status == "stopped" and result.ticket_id is None:
+        raise typer.Exit(code=1)
+
+
+def _read_optional_text(path: Path) -> str:
+    if not path.exists():
+        return ""
+    return path.read_text(encoding="utf-8")
+
+
+def _gateway_settings_from_cli_options(
+    *,
+    config: Path | None = None,
+    ollama_api_base: str | None = None,
+    model_profile: str | None = None,
+    chat_model: str | None = None,
+    autocomplete_model: str | None = None,
+) -> GatewaySettings:
+    base = load_gateway_config(explicit_path=config).settings if config else GatewaySettings()
+    return GatewaySettings(
+        host=base.host,
+        port=base.port,
+        ollama_api_base=ollama_api_base or base.ollama_api_base,
+        timeout_seconds=base.timeout_seconds,
+        model_profile=model_profile or base.model_profile,
+        chat_model=chat_model or base.chat_model,
+        autocomplete_model=autocomplete_model or base.autocomplete_model,
+        route_overrides=base.route_overrides,
+    )
 
 
 @app.command("setup-tailscale")

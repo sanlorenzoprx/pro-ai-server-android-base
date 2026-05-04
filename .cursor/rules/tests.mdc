@@ -1,0 +1,21 @@
+---
+description: Test and validation rules
+globs:
+  - "tests/**/*.py"
+  - "src/**/*.py"
+alwaysApply: false
+---
+
+# Test Rules
+
+- New behavior needs automated tests.
+- Mock external processes, ADB, Ollama, IDE CLIs, and network calls in unit tests.
+- Keep tests focused on public functions, command routing, and user-visible behavior.
+- Run default validation before reporting completion:
+
+```bash
+ruff check .
+pytest
+pro-ai-server validate-release
+```
+

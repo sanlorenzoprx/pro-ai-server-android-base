@@ -1,0 +1,284 @@
+{
+  "decisions": [
+    {
+      "decision": "accepted",
+      "phase": "phase-12",
+      "reason": "Implemented in Phase 12.",
+      "ticket_id": "TKT-P12-001",
+      "ticket_path": ".agents/build-tickets/phase-12/TKT-P12-001-decision-event-model-loader.md"
+    },
+    {
+      "decision": "accepted",
+      "phase": "phase-12",
+      "reason": "Implemented in Phase 12.",
+      "ticket_id": "TKT-P12-002",
+      "ticket_path": ".agents/build-tickets/phase-12/TKT-P12-002-append-only-event-writer.md"
+    },
+    {
+      "decision": "accepted",
+      "phase": "phase-12",
+      "reason": "Implemented in Phase 12.",
+      "ticket_id": "TKT-P12-003",
+      "ticket_path": ".agents/build-tickets/phase-12/TKT-P12-003-current-state-from-history.md"
+    },
+    {
+      "decision": "accepted",
+      "phase": "phase-12",
+      "reason": "Implemented in Phase 12.",
+      "ticket_id": "TKT-P12-004",
+      "ticket_path": ".agents/build-tickets/phase-12/TKT-P12-004-agent-history-cli.md"
+    },
+    {
+      "decision": "accepted",
+      "phase": "phase-12",
+      "reason": "Implemented in Phase 12.",
+      "ticket_id": "TKT-P12-005",
+      "ticket_path": ".agents/build-tickets/phase-12/TKT-P12-005-docs-tests-closeout.md"
+    },
+    {
+      "decision": "accepted",
+      "phase": "phase-13",
+      "reason": "Ready for Phase 13 implementation.",
+      "ticket_id": "TKT-P13-001",
+      "ticket_path": ".agents/build-tickets/phase-13/TKT-P13-001-handoff-item-selection.md"
+    },
+    {
+      "decision": "accepted",
+      "phase": "phase-13",
+      "reason": "Ready for Phase 13 implementation.",
+      "ticket_id": "TKT-P13-002",
+      "ticket_path": ".agents/build-tickets/phase-13/TKT-P13-002-report-aware-filtering.md"
+    },
+    {
+      "decision": "accepted",
+      "phase": "phase-13",
+      "reason": "Ready for Phase 13 implementation.",
+      "ticket_id": "TKT-P13-003",
+      "ticket_path": ".agents/build-tickets/phase-13/TKT-P13-003-handoff-renderer.md"
+    },
+    {
+      "decision": "accepted",
+      "phase": "phase-13",
+      "reason": "Ready for Phase 13 implementation.",
+      "ticket_id": "TKT-P13-004",
+      "ticket_path": ".agents/build-tickets/phase-13/TKT-P13-004-agent-handoff-cli.md"
+    },
+    {
+      "decision": "accepted",
+      "phase": "phase-13",
+      "reason": "Ready for Phase 13 implementation.",
+      "ticket_id": "TKT-P13-005",
+      "ticket_path": ".agents/build-tickets/phase-13/TKT-P13-005-docs-tests-closeout.md"
+    },
+    {
+      "decision": "accepted",
+      "phase": "phase-14",
+      "reason": "Ready: next-action selector is the deterministic first slice.",
+      "ticket_id": "TKT-P14-001",
+      "ticket_path": ".agents/build-tickets/phase-14/TKT-P14-001-next-action-selector.md"
+    },
+    {
+      "decision": "accepted",
+      "phase": "phase-14",
+      "reason": "Ready: execution packet renderer is needed for focused implementation handoff.",
+      "ticket_id": "TKT-P14-002",
+      "ticket_path": ".agents/build-tickets/phase-14/TKT-P14-002-execution-packet-renderer.md"
+    },
+    {
+      "decision": "accepted",
+      "phase": "phase-14",
+      "reason": "Ready: packet writer makes handoff artifacts explicit.",
+      "ticket_id": "TKT-P14-003",
+      "ticket_path": ".agents/build-tickets/phase-14/TKT-P14-003-execution-packet-writer.md"
+    },
+    {
+      "decision": "accepted",
+      "phase": "phase-14",
+      "reason": "Ready: CLI commands expose selector and packet workflow.",
+      "ticket_id": "TKT-P14-004",
+      "ticket_path": ".agents/build-tickets/phase-14/TKT-P14-004-agent-packet-cli.md"
+    },
+    {
+      "decision": "accepted",
+      "phase": "phase-14",
+      "reason": "Ready: docs, tests, and closeout complete the phase.",
+      "ticket_id": "TKT-P14-005",
+      "ticket_path": ".agents/build-tickets/phase-14/TKT-P14-005-docs-tests-closeout.md"
+    },
+    {
+      "decision": "accepted",
+      "phase": "phase-15",
+      "reason": "Ready: work-session event model is the first session tracking slice.",
+      "ticket_id": "TKT-P15-001",
+      "ticket_path": ".agents/build-tickets/phase-15/TKT-P15-001-work-session-event-model.md"
+    },
+    {
+      "decision": "accepted",
+      "phase": "phase-15",
+      "reason": "Ready: append-only work-session ledger preserves packet consumption history.",
+      "ticket_id": "TKT-P15-002",
+      "ticket_path": ".agents/build-tickets/phase-15/TKT-P15-002-work-session-ledger.md"
+    },
+    {
+      "decision": "accepted",
+      "phase": "phase-15",
+      "reason": "Ready: current-state and history renderers make sessions inspectable.",
+      "ticket_id": "TKT-P15-003",
+      "ticket_path": ".agents/build-tickets/phase-15/TKT-P15-003-session-summary-renderer.md"
+    },
+    {
+      "decision": "accepted",
+      "phase": "phase-15",
+      "reason": "Ready: CLI commands expose session recording and review.",
+      "ticket_id": "TKT-P15-004",
+      "ticket_path": ".agents/build-tickets/phase-15/TKT-P15-004-agent-session-cli.md"
+    },
+    {
+      "decision": "accepted",
+      "phase": "phase-15",
+      "reason": "Ready: docs, tests, and closeout complete the phase.",
+      "ticket_id": "TKT-P15-005",
+      "ticket_path": ".agents/build-tickets/phase-15/TKT-P15-005-docs-tests-closeout.md"
+    },
+    {
+      "decision": "accepted",
+      "phase": "phase-16",
+      "reason": "Ready: session-aware selector policy is the core Phase 16 behavior.",
+      "ticket_id": "TKT-P16-001",
+      "ticket_path": ".agents/build-tickets/phase-16/TKT-P16-001-session-aware-selector-policy.md"
+    },
+    {
+      "decision": "accepted",
+      "phase": "phase-16",
+      "reason": "Ready: next-action output should show session state.",
+      "ticket_id": "TKT-P16-002",
+      "ticket_path": ".agents/build-tickets/phase-16/TKT-P16-002-session-state-rendering.md"
+    },
+    {
+      "decision": "accepted",
+      "phase": "phase-16",
+      "reason": "Ready: packet generation must use the same session-aware selection.",
+      "ticket_id": "TKT-P16-003",
+      "ticket_path": ".agents/build-tickets/phase-16/TKT-P16-003-session-aware-packet-generation.md"
+    },
+    {
+      "decision": "accepted",
+      "phase": "phase-16",
+      "reason": "Ready: CLI policy options expose selection controls.",
+      "ticket_id": "TKT-P16-004",
+      "ticket_path": ".agents/build-tickets/phase-16/TKT-P16-004-cli-session-policy-options.md"
+    },
+    {
+      "decision": "accepted",
+      "phase": "phase-16",
+      "reason": "Ready: docs, tests, and closeout complete the phase.",
+      "ticket_id": "TKT-P16-005",
+      "ticket_path": ".agents/build-tickets/phase-16/TKT-P16-005-docs-tests-closeout.md"
+    },
+    {
+      "decision": "accepted",
+      "phase": "phase-17",
+      "reason": "Ready: reconciliation warning model is the first Phase 17 slice.",
+      "ticket_id": "TKT-P17-001",
+      "ticket_path": ".agents/build-tickets/phase-17/TKT-P17-001-reconciliation-warning-model.md"
+    },
+    {
+      "decision": "accepted",
+      "phase": "phase-17",
+      "reason": "Ready: session/report join rules create autopilot preflight warnings.",
+      "ticket_id": "TKT-P17-002",
+      "ticket_path": ".agents/build-tickets/phase-17/TKT-P17-002-session-report-join-rules.md"
+    },
+    {
+      "decision": "accepted",
+      "phase": "phase-17",
+      "reason": "Ready: reconciliation renderer makes warnings inspectable.",
+      "ticket_id": "TKT-P17-003",
+      "ticket_path": ".agents/build-tickets/phase-17/TKT-P17-003-reconciliation-renderer.md"
+    },
+    {
+      "decision": "accepted",
+      "phase": "phase-17",
+      "reason": "Ready: CLI command exposes reconciliation and fail-on-warning.",
+      "ticket_id": "TKT-P17-004",
+      "ticket_path": ".agents/build-tickets/phase-17/TKT-P17-004-agent-reconcile-cli.md"
+    },
+    {
+      "decision": "accepted",
+      "phase": "phase-17",
+      "reason": "Ready: docs, tests, and closeout complete the phase.",
+      "ticket_id": "TKT-P17-005",
+      "ticket_path": ".agents/build-tickets/phase-17/TKT-P17-005-docs-tests-closeout.md"
+    },
+    {
+      "decision": "accepted",
+      "phase": "phase-18",
+      "reason": "Ready: autopilot result model defines controlled stop output.",
+      "ticket_id": "TKT-P18-001",
+      "ticket_path": ".agents/build-tickets/phase-18/TKT-P18-001-autopilot-result-model.md"
+    },
+    {
+      "decision": "accepted",
+      "phase": "phase-18",
+      "reason": "Ready: reconciliation and next-action preflight protect autopilot writes.",
+      "ticket_id": "TKT-P18-002",
+      "ticket_path": ".agents/build-tickets/phase-18/TKT-P18-002-autopilot-preflight.md"
+    },
+    {
+      "decision": "accepted",
+      "phase": "phase-18",
+      "reason": "Ready: packet and session actions are explicit execute-mode behavior.",
+      "ticket_id": "TKT-P18-003",
+      "ticket_path": ".agents/build-tickets/phase-18/TKT-P18-003-autopilot-packet-session-actions.md"
+    },
+    {
+      "decision": "accepted",
+      "phase": "phase-18",
+      "reason": "Ready: CLI command exposes the controlled autopilot tick.",
+      "ticket_id": "TKT-P18-004",
+      "ticket_path": ".agents/build-tickets/phase-18/TKT-P18-004-agent-autopilot-cli.md"
+    },
+    {
+      "decision": "accepted",
+      "phase": "phase-18",
+      "reason": "Ready: docs, tests, and closeout complete the phase.",
+      "ticket_id": "TKT-P18-005",
+      "ticket_path": ".agents/build-tickets/phase-18/TKT-P18-005-docs-tests-closeout.md"
+    },
+    {
+      "decision": "accepted",
+      "phase": "phase-19",
+      "reason": "Ready: session archive model and candidate selection are the first Phase 19 slice.",
+      "ticket_id": "TKT-P19-001",
+      "ticket_path": ".agents/build-tickets/phase-19/TKT-P19-001-session-archive-model.md"
+    },
+    {
+      "decision": "accepted",
+      "phase": "phase-19",
+      "reason": "Ready: archive writer cleans current-state sessions while preserving history.",
+      "ticket_id": "TKT-P19-002",
+      "ticket_path": ".agents/build-tickets/phase-19/TKT-P19-002-archive-writer-cleanup.md"
+    },
+    {
+      "decision": "accepted",
+      "phase": "phase-19",
+      "reason": "Ready: archive renderer makes cleanup inspectable.",
+      "ticket_id": "TKT-P19-003",
+      "ticket_path": ".agents/build-tickets/phase-19/TKT-P19-003-session-archive-renderer.md"
+    },
+    {
+      "decision": "accepted",
+      "phase": "phase-19",
+      "reason": "Ready: CLI command exposes session archive cleanup.",
+      "ticket_id": "TKT-P19-004",
+      "ticket_path": ".agents/build-tickets/phase-19/TKT-P19-004-agent-session-archive-cli.md"
+    },
+    {
+      "decision": "accepted",
+      "phase": "phase-19",
+      "reason": "Ready: docs, tests, and closeout complete the phase.",
+      "ticket_id": "TKT-P19-005",
+      "ticket_path": ".agents/build-tickets/phase-19/TKT-P19-005-docs-tests-closeout.md"
+    }
+  ]
+}

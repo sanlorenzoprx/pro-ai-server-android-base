@@ -1,0 +1,19 @@
+---
+description: CodeFlow Build Bridge rules
+globs:
+  - ".agents/**/*.md"
+  - ".codex/**/*.md"
+  - "src/**/*.py"
+  - "tests/**/*.py"
+alwaysApply: true
+---
+
+# CodeFlow Build Bridge Rules
+
+- Major runtime changes require a matching `.agents/build-tickets/` ticket.
+- Contract-impacting changes require a referenced `.agents/contracts/` file.
+- Implement one ticket at a time when practical.
+- Write validation evidence to `.agents/reports/`.
+- Use `.agents/runbooks/phase-ticket-handoff.md` before implementation and `.agents/runbooks/phase-closeout.md` before declaring a phase done.
+- If implementation drifts from a ticket or contract, record the drift and reconcile it explicitly.
+

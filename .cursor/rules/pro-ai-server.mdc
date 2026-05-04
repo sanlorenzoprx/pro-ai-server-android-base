@@ -1,0 +1,16 @@
+---
+description: Pro AI Server project rules
+globs:
+  - "**/*"
+alwaysApply: true
+---
+
+# Pro AI Server Rules
+
+- Preserve existing CLI commands and flags unless the user explicitly approves a breaking change.
+- Keep Android, ADB, Termux, Ollama, Continue, LAN, and Tailscale behavior visible and inspectable.
+- Prefer USB localhost defaults unless the user explicitly chooses LAN or Tailscale exposure.
+- Back up user configuration before overwriting it.
+- Add or update tests for new behavior.
+- Update docs when workflow commands or user-facing behavior changes.
+
