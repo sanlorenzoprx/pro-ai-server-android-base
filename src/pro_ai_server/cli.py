@@ -93,7 +93,7 @@ from pro_ai_server.rag.store import IndexStore
 from pro_ai_server.release_validation import validate_release_layout
 from pro_ai_server.script_delivery import build_script_delivery_plan
 from pro_ai_server.setup_receipt import build_setup_receipt, render_setup_receipt
-from pro_ai_server.setup_workflow import plan_setup_workflow
+from pro_ai_server.setup_workflow import plan_production_installer, plan_setup_workflow
 from pro_ai_server.status import build_status_report, render_status_report
 from pro_ai_server.termux_readiness import (
     assess_termux_readiness,
@@ -1190,6 +1190,7 @@ def setup(
     create_usb_tunnel: bool | None = typer.Option(None, "--tunnel/--no-tunnel", help="Plan/create USB tunnel."),
     push: bool = typer.Option(False, "--push-scripts", help="Plan/push generated scripts to the phone."),
     execute: bool = typer.Option(False, help="Execute the planned local/device actions."),
+    production: bool = typer.Option(False, "--production", help="Use the production installer state-machine plan."),
     yes: bool = typer.Option(False, "--yes", help="Confirm setup actions that write config or expose network mode."),
     output_dir: Path = typer.Option(Path("."), help="Directory where generated/termux will be written."),
     remote_home: str = typer.Option("/data/data/com.termux/files/home", help="Remote Termux home directory."),
@@ -1197,6 +1198,7 @@ def setup(
 ) -> None:
     """Plan or execute the guided MVP setup workflow."""
     try:
+        production_plan = None
         plan = plan_setup_workflow(
             mode=mode,
             host=host,
@@ -1209,14 +1211,40 @@ def setup(
             remote_termux_home=remote_home,
             serial=serial,
         )
+        if production:
+            production_plan = plan_production_installer(
+                mode=mode,
+                host=host,
+                ram_gb=ram_gb,
+                profile=profile_name,
+                configure_continue=configure_continue_config,
+                create_usb_tunnel=create_usb_tunnel,
+                push_scripts=push,
+                generated_termux_dir=output_dir / "generated" / "termux",
+                remote_termux_home=remote_home,
+                serial=serial,
+            )
+            plan = production_plan.setup_plan
     except ValueError as exc:
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(code=1) from exc
 
-    console.print(f"[bold]Setup plan[/bold]: {plan.summary}")
+    if production_plan is not None:
+        console.print(f"[bold]Production installer plan[/bold]: {production_plan.summary}")
+        for warning in production_plan.warnings:
+            console.print(f"[yellow]Warning:[/yellow] {warning}")
+        for index, step in enumerate(production_plan.steps, start=1):
+            console.print(f"{index}. [bold]{step.title}[/bold] ({step.key}) - {step.detail}")
+            if step.recovery:
+                console.print(f"   Recovery: {step.recovery}")
+    else:
+        console.print(f"[bold]Setup plan[/bold]: {plan.summary}")
     for warning in plan.warnings:
-        console.print(f"[yellow]Warning:[/yellow] {warning}")
+        if production_plan is None:
+            console.print(f"[yellow]Warning:[/yellow] {warning}")
     for index, step in enumerate(plan.steps, start=1):
+        if production_plan is not None:
+            break
         console.print(f"{index}. [bold]{step.title}[/bold] - {step.detail}")
         for note in step.notes:
             console.print(f"   Note: {note}")
@@ -1281,6 +1309,7 @@ def setup(
             selected_device_serial=selected_serial,
             pushed_scripts=push,
             tunnel_requested=tunnel_requested,
+            production_plan=production_plan,
         )
         console.print(render_setup_receipt(receipt))
     except CommandError as exc:

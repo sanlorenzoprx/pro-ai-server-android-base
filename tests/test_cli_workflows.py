@@ -21,6 +21,20 @@ def test_setup_prints_plan_without_executing_actions():
     assert "Generated Termux files" not in result.output
 
 
+def test_setup_production_prints_state_machine_without_executing_actions():
+    runner = CliRunner()
+
+    result = runner.invoke(cli.app, ["setup", "--production", "--mode", "usb", "--no-continue", "--no-tunnel"])
+
+    assert result.exit_code == 0
+    assert "Production installer plan" in result.output
+    assert "host-checks" in result.output
+    assert "android-phone-detection" in result.output
+    assert "test-prompt" in result.output
+    assert "Plan only" in result.output
+    assert "Setup plan" not in result.output
+
+
 def test_setup_execute_refuses_continue_config_without_yes():
     runner = CliRunner()
 

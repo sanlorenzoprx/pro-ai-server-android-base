@@ -7,7 +7,7 @@ from typing import Iterable
 from pro_ai_server.continue_config import ContinueConfigWriteResult
 from pro_ai_server.models import ModelPlan
 from pro_ai_server.script_delivery import ScriptDeliveryPlan
-from pro_ai_server.setup_workflow import SetupWorkflowPlan
+from pro_ai_server.setup_workflow import ProductionInstallerPlan, ProductionInstallerStep, SetupWorkflowPlan
 from pro_ai_server.termux_scripts import TermuxScriptBundle
 
 
@@ -33,6 +33,7 @@ class SetupReceipt:
     notes: tuple[str, ...] = ()
     artifacts: tuple[SetupReceiptItem, ...] = ()
     next_steps: tuple[SetupReceiptItem, ...] = ()
+    installer_steps: tuple[ProductionInstallerStep, ...] = ()
 
 
 def build_setup_receipt(
@@ -49,6 +50,7 @@ def build_setup_receipt(
     tunnel_requested: bool | None = None,
     warnings: Iterable[str] = (),
     notes: Iterable[str] = (),
+    production_plan: ProductionInstallerPlan | None = None,
 ) -> SetupReceipt:
     """Build a pure execution receipt from already-created plan/result objects."""
 
@@ -89,6 +91,7 @@ def build_setup_receipt(
         notes=resolved_notes,
         artifacts=artifacts,
         next_steps=next_steps,
+        installer_steps=production_plan.steps if production_plan else (),
     )
 
 
@@ -114,6 +117,9 @@ def render_setup_receipt(receipt: SetupReceipt) -> str:
         lines.append("- none")
     lines.extend(["", "Next steps"])
     lines.extend(_render_items(receipt.next_steps))
+    if receipt.installer_steps:
+        lines.extend(["", "Production installer steps"])
+        lines.extend(_render_installer_steps(receipt.installer_steps))
     lines.extend(["", "Warnings"])
     lines.extend(f"- {warning}" for warning in receipt.warnings)
     if not receipt.warnings:
@@ -171,6 +177,18 @@ def _render_items(items: tuple[SetupReceiptItem, ...]) -> list[str]:
     for item in items:
         suffix = f" ({item.detail})" if item.detail else ""
         rendered.append(f"- {item.label}: {item.value}{suffix}")
+    return rendered
+
+
+def _render_installer_steps(steps: tuple[ProductionInstallerStep, ...]) -> list[str]:
+    rendered = []
+    for step in steps:
+        rendered.append(f"- {step.key}: {step.status} - {step.title}")
+        if step.status == "failure":
+            if step.recovery:
+                rendered.append(f"  Recovery: {step.recovery}")
+            if step.debug_detail:
+                rendered.append(f"  Debug: {step.debug_detail}")
     return rendered
 
 

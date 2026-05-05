@@ -32,6 +32,33 @@ class SetupWorkflowPlan:
     summary: str
 
 
+@dataclass(frozen=True)
+class ProductionInstallerStep:
+    key: str
+    title: str
+    detail: str
+    status: str = "pending"
+    recovery: str | None = None
+    debug_detail: str | None = None
+    setup_step_key: str | None = None
+
+
+@dataclass(frozen=True)
+class ProductionInstallerPlan:
+    mode: str
+    host: str | None
+    model_plan: ModelPlan
+    steps: tuple[ProductionInstallerStep, ...]
+    warnings: tuple[str, ...]
+    requires_confirmation: bool
+    setup_plan: SetupWorkflowPlan
+    summary: str
+
+    @property
+    def failed(self) -> bool:
+        return any(step.status == "failure" for step in self.steps)
+
+
 def plan_setup_workflow(
     mode: str = "usb",
     host: str | None = None,
@@ -143,6 +170,183 @@ def plan_setup_workflow(
     )
 
 
+def plan_production_installer(
+    mode: str = "usb",
+    host: str | None = None,
+    ram_gb: float | None = None,
+    profile: str | None = None,
+    configure_continue: bool = True,
+    create_usb_tunnel: bool | None = None,
+    push_scripts: bool = True,
+    generated_termux_dir: Path = DEFAULT_SCRIPT_DIR,
+    remote_termux_home: str = "/data/data/com.termux/files/home",
+    serial: str | None = None,
+) -> ProductionInstallerPlan:
+    """Build the stable production installer state machine.
+
+    The production plan is intentionally pure: it describes the steps that the
+    CLI, packaged executable, and future UI should execute while reusing the
+    existing setup workflow for model, script, Continue, tunnel, and push
+    planning.
+    """
+
+    setup_plan = plan_setup_workflow(
+        mode=mode,
+        host=host,
+        ram_gb=ram_gb,
+        profile=profile,
+        configure_continue=configure_continue,
+        create_usb_tunnel=create_usb_tunnel,
+        push_scripts=push_scripts,
+        generated_termux_dir=generated_termux_dir,
+        remote_termux_home=remote_termux_home,
+        serial=serial,
+    )
+    setup_steps = {step.key: step for step in setup_plan.steps}
+    steps = (
+        ProductionInstallerStep(
+            key="host-checks",
+            title="Host checks",
+            detail="Verify Windows prerequisites, bundled ADB availability, and supported IDE discovery.",
+            recovery="Install the packaged Pro AI Server build or run doctor for host diagnostics.",
+        ),
+        ProductionInstallerStep(
+            key="android-phone-detection",
+            title="Android phone detection",
+            detail="Detect exactly one authorized Android phone over USB, or use the requested serial.",
+            recovery="Connect the phone by USB, enable USB debugging, and approve the Android prompt.",
+        ),
+        ProductionInstallerStep(
+            key="adb-verification",
+            title="ADB verification",
+            detail="Confirm ADB can run shell commands against the selected phone.",
+            recovery="Reconnect the phone, restart ADB, or install bundled platform-tools.",
+        ),
+        ProductionInstallerStep(
+            key="hardware-scan",
+            title="Hardware scan",
+            detail="Read Android version, ABI, RAM, storage, battery, and device model over ADB.",
+            recovery="Keep the phone unlocked and rerun scan after ADB authorization succeeds.",
+        ),
+        ProductionInstallerStep(
+            key="model-profile-selection",
+            title="Model profile selection",
+            detail=(
+                f"Use the {setup_plan.model_plan.profile} profile "
+                f"({setup_plan.model_plan.chat_model} chat, "
+                f"{setup_plan.model_plan.autocomplete_model} autocomplete)."
+            ),
+            setup_step_key="select-models",
+        ),
+        ProductionInstallerStep(
+            key="termux-readiness",
+            title="Termux readiness",
+            detail="Verify Termux, Termux:API, and initialized Termux home on the phone.",
+            recovery="Install Termux and Termux:API from the same trusted source, then open Termux once.",
+        ),
+        ProductionInstallerStep(
+            key="script-generation",
+            title="Script generation",
+            detail=setup_steps["generate-termux-scripts"].detail,
+            setup_step_key="generate-termux-scripts",
+        ),
+        ProductionInstallerStep(
+            key="script-push",
+            title="Script push",
+            detail=_production_script_push_detail(setup_steps),
+            recovery="Rerun with the phone connected and enough Termux storage available.",
+            setup_step_key="push-scripts",
+        ),
+        ProductionInstallerStep(
+            key="server-start",
+            title="Server start",
+            detail="Guide the operator to run bootstrap, install models, and start Pro AI Server inside Termux.",
+            recovery="Open Termux and run the generated commands shown in the setup receipt.",
+        ),
+        ProductionInstallerStep(
+            key="usb-tunnel",
+            title="USB tunnel",
+            detail=_production_tunnel_detail(setup_steps),
+            recovery="Keep the phone connected by USB and rerun the tunnel step.",
+            setup_step_key="create-usb-tunnel",
+        ),
+        ProductionInstallerStep(
+            key="model-inventory-check",
+            title="Model inventory check",
+            detail="Check Ollama model inventory for the selected chat and autocomplete models.",
+            recovery="Run the generated install-models.sh script inside Termux, then retry.",
+        ),
+        ProductionInstallerStep(
+            key="test-prompt",
+            title="Test prompt",
+            detail="Placeholder for TKT-P20-003: send a small prompt through the local Ollama endpoint.",
+            recovery="Verify the server is running, the USB tunnel is active, and the selected model is installed.",
+        ),
+        ProductionInstallerStep(
+            key="final-receipt",
+            title="Final receipt",
+            detail="Render setup artifacts, selected device, mode, model profile, tunnel state, and next steps.",
+            setup_step_key="setup-receipt",
+        ),
+    )
+    return ProductionInstallerPlan(
+        mode=setup_plan.mode,
+        host=setup_plan.host,
+        model_plan=setup_plan.model_plan,
+        steps=steps,
+        warnings=setup_plan.warnings,
+        requires_confirmation=setup_plan.requires_confirmation,
+        setup_plan=setup_plan,
+        summary=(
+            "Production installer state machine for "
+            f"{setup_plan.mode} setup with {setup_plan.model_plan.profile} profile "
+            f"and {len(steps)} stable steps."
+        ),
+    )
+
+
+def mark_production_step_failed(
+    plan: ProductionInstallerPlan,
+    key: str,
+    *,
+    message: str,
+    debug_detail: str,
+    recovery: str | None = None,
+) -> ProductionInstallerPlan:
+    """Return a copy of a production plan with one step marked as failed."""
+
+    updated_steps = []
+    found = False
+    for step in plan.steps:
+        if step.key != key:
+            updated_steps.append(step)
+            continue
+        found = True
+        updated_steps.append(
+            ProductionInstallerStep(
+                key=step.key,
+                title=step.title,
+                detail=message,
+                status="failure",
+                recovery=recovery or step.recovery,
+                debug_detail=debug_detail,
+                setup_step_key=step.setup_step_key,
+            )
+        )
+    if not found:
+        raise ValueError(f"Unknown production installer step '{key}'.")
+    return ProductionInstallerPlan(
+        mode=plan.mode,
+        host=plan.host,
+        model_plan=plan.model_plan,
+        steps=tuple(updated_steps),
+        warnings=plan.warnings,
+        requires_confirmation=plan.requires_confirmation,
+        setup_plan=plan.setup_plan,
+        summary=plan.summary,
+    )
+
+
 def _normalize_mode(mode: str) -> str:
     normalized = mode.strip().lower()
     if normalized not in VALID_SETUP_MODES:
@@ -187,3 +391,17 @@ def _summary(
     ]
     confirmation = "requires explicit confirmation" if requires_confirmation else "does not require exposure confirmation"
     return f"Plan {target} setup with {model_plan.profile} profile, {', '.join(options)}; {confirmation}."
+
+
+def _production_script_push_detail(setup_steps: dict[str, SetupStep]) -> str:
+    step = setup_steps.get("push-scripts")
+    if step is None:
+        return "Skip script push in this plan; scripts can be pushed later with push-scripts."
+    return step.detail
+
+
+def _production_tunnel_detail(setup_steps: dict[str, SetupStep]) -> str:
+    step = setup_steps.get("create-usb-tunnel")
+    if step is None:
+        return "Skip USB tunnel in this plan because the selected mode does not require it."
+    return step.detail

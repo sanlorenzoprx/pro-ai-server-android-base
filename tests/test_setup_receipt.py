@@ -4,7 +4,7 @@ from pro_ai_server.continue_config import ContinueConfigWriteResult
 from pro_ai_server.models import model_plan_for_profile
 from pro_ai_server.script_delivery import build_script_delivery_plan
 from pro_ai_server.setup_receipt import SetupReceipt, build_setup_receipt, render_setup_receipt
-from pro_ai_server.setup_workflow import plan_setup_workflow
+from pro_ai_server.setup_workflow import mark_production_step_failed, plan_production_installer, plan_setup_workflow
 from pro_ai_server.termux_scripts import generate_termux_scripts
 
 
@@ -134,3 +134,22 @@ def test_render_setup_receipt_handles_absent_optional_fields():
     assert "- Selected device serial: not recorded" in rendered
     assert "Artifacts\n- none\n" in rendered
     assert "Warnings\n- none\n" in rendered
+
+
+def test_receipt_can_include_production_installer_steps():
+    production_plan = mark_production_step_failed(
+        plan_production_installer(),
+        "adb-verification",
+        message="ADB shell command failed.",
+        debug_detail="adb shell getprop returned exit code 1",
+    )
+
+    receipt = build_setup_receipt(workflow_plan=production_plan.setup_plan, production_plan=production_plan)
+    rendered = render_setup_receipt(receipt)
+
+    assert receipt.installer_steps == production_plan.steps
+    assert "Production installer steps\n" in rendered
+    assert "- host-checks: pending - Host checks\n" in rendered
+    assert "- adb-verification: failure - ADB verification\n" in rendered
+    assert "Recovery: Reconnect the phone" in rendered
+    assert "Debug: adb shell getprop returned exit code 1" in rendered

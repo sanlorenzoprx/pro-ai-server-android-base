@@ -1,6 +1,6 @@
 import pytest
 
-from pro_ai_server.setup_workflow import plan_setup_workflow
+from pro_ai_server.setup_workflow import mark_production_step_failed, plan_production_installer, plan_setup_workflow
 
 
 def step_keys(plan):
@@ -93,3 +93,66 @@ def test_model_profile_can_be_selected_by_ram_or_explicit_profile():
 def test_unknown_setup_mode_is_rejected():
     with pytest.raises(ValueError, match="Unknown setup mode"):
         plan_setup_workflow(mode="bluetooth")
+
+
+def test_production_installer_has_stable_required_step_order():
+    plan = plan_production_installer(serial="device-123")
+
+    assert plan.mode == "usb"
+    assert plan.model_plan.profile == "professional"
+    assert plan.setup_plan is not None
+    assert tuple(step.key for step in plan.steps) == (
+        "host-checks",
+        "android-phone-detection",
+        "adb-verification",
+        "hardware-scan",
+        "model-profile-selection",
+        "termux-readiness",
+        "script-generation",
+        "script-push",
+        "server-start",
+        "usb-tunnel",
+        "model-inventory-check",
+        "test-prompt",
+        "final-receipt",
+    )
+    assert all(step.status == "pending" for step in plan.steps)
+    assert "13 stable steps" in plan.summary
+
+
+def test_production_installer_reuses_setup_workflow_for_models_scripts_push_and_tunnel():
+    plan = plan_production_installer(ram_gb=4.0, serial="device-123")
+
+    assert plan.model_plan.profile == "lightweight"
+    assert "qwen2.5-coder:1.5b" in next(step.detail for step in plan.steps if step.key == "model-profile-selection")
+    assert "Generate" in next(step.detail for step in plan.steps if step.key == "script-generation")
+    assert "adb commands" in next(step.detail for step in plan.steps if step.key == "script-push")
+    assert "adb reverse" in next(step.detail for step in plan.steps if step.key == "usb-tunnel")
+
+
+def test_production_installer_failure_mapping_is_structured():
+    plan = plan_production_installer()
+
+    failed = mark_production_step_failed(
+        plan,
+        "android-phone-detection",
+        message="No authorized Android phone was found.",
+        debug_detail="adb devices returned no device rows",
+    )
+    step = next(step for step in failed.steps if step.key == "android-phone-detection")
+
+    assert failed.failed is True
+    assert step.status == "failure"
+    assert step.detail == "No authorized Android phone was found."
+    assert "USB debugging" in step.recovery
+    assert step.debug_detail == "adb devices returned no device rows"
+
+
+def test_unknown_production_step_failure_is_rejected():
+    with pytest.raises(ValueError, match="Unknown production installer step"):
+        mark_production_step_failed(
+            plan_production_installer(),
+            "not-a-step",
+            message="bad step",
+            debug_detail="bad step",
+        )
