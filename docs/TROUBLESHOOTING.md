@@ -58,11 +58,19 @@ If F-Droid is not installed, provide a locally reviewed F-Droid APK:
 pro-ai-server install-termux-apps --serial <device-serial> --fdroid-apk C:\path\to\fdroid.apk --yes
 ```
 
+For pinned APK downloads, provide both URL and SHA-256:
+
+```powershell
+pro-ai-server install-termux-apps --serial <device-serial> --fdroid-url https://example.com/fdroid.apk --fdroid-sha256 <sha256> --yes
+```
+
 For a fully scripted path with local APKs that you already reviewed:
 
 ```powershell
 pro-ai-server install-termux-apps --serial <device-serial> --fdroid-apk C:\path\to\fdroid.apk --termux-apk C:\path\to\termux.apk --termux-api-apk C:\path\to\termux-api.apk --yes
 ```
+
+The helper refuses APK downloads without a SHA-256 and removes files that fail checksum verification.
 
 Termux:Widget manual placement is still required. Install Termux:Widget, confirm the generated `Start Pro AI Server` shortcut is in `~/.shortcuts`, then add the widget or shortcut from the Android home screen.
 

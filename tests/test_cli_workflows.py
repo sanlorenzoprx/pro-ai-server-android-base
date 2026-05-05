@@ -1,3 +1,6 @@
+import hashlib
+from pathlib import Path
+
 from typer.testing import CliRunner
 
 from pro_ai_server import cli
@@ -382,6 +385,87 @@ def test_install_termux_apps_reports_missing_fdroid_before_termux_pages(monkeypa
     assert result.exit_code == 1
     assert "F-Droid is not installed" in result.output
     assert "Provide --fdroid-apk" in result.output
+
+
+def test_install_termux_apps_downloads_and_verifies_pinned_fdroid_apk(monkeypatch, tmp_path):
+    runner = CliRunner()
+    apk_bytes = b"fdroid apk"
+    apk_hash = hashlib.sha256(apk_bytes).hexdigest()
+    commands = []
+
+    def fake_urlretrieve(url, target):
+        Path(target).write_bytes(apk_bytes)
+        return target, None
+
+    def fake_run(command, capture_output, text):
+        import subprocess
+
+        commands.append(command)
+        if command == ["adb", "devices"]:
+            return subprocess.CompletedProcess(command, 0, stdout="List of devices attached\nABC123\tdevice\n", stderr="")
+        if command == ["adb", "-s", "ABC123", "shell", "pm", "path", "org.fdroid.fdroid"]:
+            return subprocess.CompletedProcess(command, 1, stdout="", stderr="package not found")
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(cli, "resolve_adb", lambda: "adb")
+    monkeypatch.setattr(cli, "urlretrieve", fake_urlretrieve)
+    monkeypatch.setattr(cli.subprocess, "run", fake_run)
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "install-termux-apps",
+            "--fdroid-url",
+            "https://downloads.example/fdroid.apk",
+            "--fdroid-sha256",
+            apk_hash,
+            "--apk-cache-dir",
+            str(tmp_path),
+            "--yes",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Verified" in result.output
+    assert ["adb", "-s", "ABC123", "install", "-r", str(tmp_path / "fdroid.apk")] in commands
+
+
+def test_install_termux_apps_refuses_download_without_sha256(monkeypatch):
+    runner = CliRunner()
+
+    monkeypatch.setattr(cli, "resolve_adb", lambda: "adb")
+
+    result = runner.invoke(cli.app, ["install-termux-apps", "--fdroid-url", "https://downloads.example/fdroid.apk"])
+
+    assert result.exit_code == 1
+    assert "requires both URL and SHA-256" in result.output
+
+
+def test_install_termux_apps_refuses_download_with_sha256_mismatch(monkeypatch, tmp_path):
+    runner = CliRunner()
+
+    def fake_urlretrieve(url, target):
+        Path(target).write_bytes(b"wrong apk")
+        return target, None
+
+    monkeypatch.setattr(cli, "resolve_adb", lambda: "adb")
+    monkeypatch.setattr(cli, "urlretrieve", fake_urlretrieve)
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "install-termux-apps",
+            "--fdroid-url",
+            "https://downloads.example/fdroid.apk",
+            "--fdroid-sha256",
+            "0" * 64,
+            "--apk-cache-dir",
+            str(tmp_path),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "SHA-256 mismatch" in result.output
 
 
 def test_validate_release_reports_issues(monkeypatch, tmp_path):

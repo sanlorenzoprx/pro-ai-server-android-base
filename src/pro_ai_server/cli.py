@@ -1,7 +1,10 @@
 from pathlib import Path
+import hashlib
 import shutil
 import subprocess
 from dataclasses import dataclass
+from urllib.parse import urlparse
+from urllib.request import urlretrieve
 
 import typer
 from rich.console import Console
@@ -507,11 +510,30 @@ def termux_check(
 def install_termux_apps(
     serial: str | None = typer.Option(None, help="ADB device serial to use when multiple phones are connected."),
     fdroid_apk: Path | None = typer.Option(None, "--fdroid-apk", help="Optional local F-Droid APK to install."),
+    fdroid_url: str | None = typer.Option(None, "--fdroid-url", help="Optional pinned F-Droid APK URL to download."),
+    fdroid_sha256: str | None = typer.Option(None, "--fdroid-sha256", help="Expected SHA-256 for --fdroid-url."),
     termux_apk: Path | None = typer.Option(None, "--termux-apk", help="Optional local Termux APK to install."),
+    termux_url: str | None = typer.Option(None, "--termux-url", help="Optional pinned Termux APK URL to download."),
+    termux_sha256: str | None = typer.Option(None, "--termux-sha256", help="Expected SHA-256 for --termux-url."),
     termux_api_apk: Path | None = typer.Option(
         None,
         "--termux-api-apk",
         help="Optional local Termux:API APK to install.",
+    ),
+    termux_api_url: str | None = typer.Option(
+        None,
+        "--termux-api-url",
+        help="Optional pinned Termux:API APK URL to download.",
+    ),
+    termux_api_sha256: str | None = typer.Option(
+        None,
+        "--termux-api-sha256",
+        help="Expected SHA-256 for --termux-api-url.",
+    ),
+    apk_cache_dir: Path = typer.Option(
+        Path(".cache") / "pro-ai-server" / "apks",
+        "--apk-cache-dir",
+        help="Directory for downloaded APK files.",
     ),
     yes: bool = typer.Option(False, "--yes", help="Confirm local APK installation actions."),
 ) -> None:
@@ -525,6 +547,28 @@ def install_termux_apps(
         if apk is not None and not apk.exists():
             console.print(f"[red]{label} APK not found:[/red] {apk}")
             raise typer.Exit(code=1)
+
+    fdroid_apk = _resolve_downloaded_apk(
+        label="F-Droid",
+        local_apk=fdroid_apk,
+        url=fdroid_url,
+        sha256=fdroid_sha256,
+        cache_dir=apk_cache_dir,
+    )
+    termux_apk = _resolve_downloaded_apk(
+        label="Termux",
+        local_apk=termux_apk,
+        url=termux_url,
+        sha256=termux_sha256,
+        cache_dir=apk_cache_dir,
+    )
+    termux_api_apk = _resolve_downloaded_apk(
+        label="Termux:API",
+        local_apk=termux_api_apk,
+        url=termux_api_url,
+        sha256=termux_api_sha256,
+        cache_dir=apk_cache_dir,
+    )
 
     try:
         selected_serial = select_device_serial(adb, serial)
@@ -560,6 +604,54 @@ def install_termux_apps(
 
     console.print("After installing, open Termux once so its home directory initializes.")
     console.print(f"Then run: pro-ai-server termux-check --serial {selected_serial}")
+
+
+def _resolve_downloaded_apk(
+    *,
+    label: str,
+    local_apk: Path | None,
+    url: str | None,
+    sha256: str | None,
+    cache_dir: Path,
+) -> Path | None:
+    if url is None and sha256 is None:
+        return local_apk
+    if url is None or sha256 is None:
+        console.print(f"[red]{label} download requires both URL and SHA-256.[/red]")
+        raise typer.Exit(code=1)
+    if local_apk is not None:
+        console.print(f"[red]Use either local {label} APK or download URL, not both.[/red]")
+        raise typer.Exit(code=1)
+
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    target = cache_dir / _download_filename(url, label)
+    console.print(f"Downloading {label} APK: {url}")
+    urlretrieve(url, target)
+    actual = _sha256_file(target)
+    expected = sha256.lower()
+    if actual.lower() != expected:
+        target.unlink(missing_ok=True)
+        console.print(f"[red]{label} APK SHA-256 mismatch.[/red]")
+        console.print(f"Expected: {expected}")
+        console.print(f"Actual:   {actual}")
+        raise typer.Exit(code=1)
+    console.print(f"[green]Verified[/green] {label} APK SHA-256.")
+    return target
+
+
+def _download_filename(url: str, label: str) -> str:
+    path = Path(urlparse(url).path)
+    if path.name:
+        return path.name
+    return f"{label.lower().replace(':', '-').replace(' ', '-')}.apk"
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def _install_fdroid_app(*, adb: str, serial: str, apk: Path | None, yes: bool) -> None:

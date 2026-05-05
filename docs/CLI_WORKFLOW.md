@@ -82,11 +82,19 @@ If F-Droid is not installed yet, install a locally reviewed F-Droid APK first:
 pro-ai-server install-termux-apps --serial <device-serial> --fdroid-apk C:\path\to\fdroid.apk --yes
 ```
 
+For pinned downloads, provide both the APK URL and expected SHA-256. Downloads are refused without a checksum and deleted on checksum mismatch:
+
+```powershell
+pro-ai-server install-termux-apps --serial <device-serial> --fdroid-url https://example.com/fdroid.apk --fdroid-sha256 <sha256> --yes
+```
+
 For fully scripted installs with locally reviewed APK files:
 
 ```powershell
 pro-ai-server install-termux-apps --serial <device-serial> --fdroid-apk C:\path\to\fdroid.apk --termux-apk C:\path\to\termux.apk --termux-api-apk C:\path\to\termux-api.apk --yes
 ```
+
+The same pinned-download pattern is available for Termux and Termux:API with `--termux-url`, `--termux-sha256`, `--termux-api-url`, and `--termux-api-sha256`.
 
 After installing, open Termux once on the phone so its home directory initializes, then rerun `termux-check`.
 
