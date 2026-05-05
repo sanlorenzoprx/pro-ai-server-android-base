@@ -209,16 +209,31 @@ Known limitations:
 
 ## Live IDE Evidence
 
-Record:
+TKT-P22-003 evidence captured on May 5, 2026:
 
-- IDE: VS Code or Cursor.
-- Continue extension state.
-- API base: `http://localhost:11434`.
-- Chat prompt used.
-- Response summary.
-- Autocomplete or coding assistance proof.
-- Latency or low-RAM caveats.
-- Screenshot or recording filename when available.
+| Check | Result | Evidence |
+| --- | --- | --- |
+| VS Code readiness | Passed | `devstack-ide-status` reported `code` ready with Continue installed. |
+| Cursor readiness | Passed | `devstack-ide-status` reported `cursor` ready with Continue installed. |
+| DevStack Continue config | Passed | `configure-devstack --profile lightweight` wrote `C:\Users\hecto\.continue\config.yaml`. |
+| API base | Passed | Continue config points chat and autocomplete to `http://localhost:11434`. |
+| Model profile | Passed | Chat/edit/apply uses `qwen2.5-coder:1.5b`; autocomplete uses `qwen2.5-coder:0.5b`. |
+| USB tunnel | Passed | `tunnel --serial ZY22GKMWPN` returned `11434`; `status` reported the tunnel active. |
+| Local chat response | Blocked | `Invoke-RestMethod http://localhost:11434/api/generate` failed because no Ollama server is reachable yet. |
+| Autocomplete or coding assistance proof | Blocked | Continue cannot produce a local IDE response until Ollama is running behind the USB tunnel. |
+
+Continue config backup:
+
+- `C:\Users\hecto\.continue\config.yaml.pro-ai-server-backup-20260505-162429`
+
+Blocked live proof:
+
+- Termux is not installed.
+- Termux:API is not installed.
+- Termux home is not initialized.
+- Ollama is not reachable at `http://localhost:11434`.
+
+Launch caveat: the connected Moto g 5G (2022) is a yellow compatibility device, so the live IDE path should use the lightweight profile until stronger hardware is validated.
 
 ## Release Evidence Bundle
 
