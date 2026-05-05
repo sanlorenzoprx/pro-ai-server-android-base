@@ -64,7 +64,7 @@ from pro_ai_server.agent.ticketizer import (
     select_accepted_recommendations,
     write_ticket_drafts,
 )
-from pro_ai_server.continue_config import exposure_warnings, write_continue_config
+from pro_ai_server.continue_config import devstack_restore_instructions, exposure_warnings, write_continue_config
 from pro_ai_server.device_scan import (
     DeviceScanOutputs,
     build_device_profile_from_scan_outputs,
@@ -424,6 +424,36 @@ def configure_continue(
 
     for warning in exposure_warnings(mode):
         console.print(f"[yellow]Warning:[/yellow] {warning}")
+
+
+@app.command("configure-devstack")
+def configure_devstack(
+    profile_name: str = typer.Option("professional", "--profile", help="Model profile to use."),
+    ram_gb: float | None = typer.Option(None, help="Optional RAM value used to select a profile."),
+) -> None:
+    """Generate the DevStack launch Continue config for VS Code and Cursor."""
+    plan = model_plan_for_ram(ram_gb) if ram_gb is not None else model_plan_for_profile(profile_name)
+    result = write_continue_config(plan, mode="usb", devstack=True)
+
+    console.print(f"[green]Wrote DevStack Continue config:[/green] {result.config_path}")
+    console.print(f"API base: {result.api_base}")
+    console.print(f"Chat model: {plan.chat_model}")
+    console.print(f"Autocomplete model: {plan.autocomplete_model}")
+    for instruction in devstack_restore_instructions(result):
+        console.print(instruction)
+
+    ready_ides = [
+        readiness.ide.command
+        for readiness in launch_ide_readiness_matrix()
+        if readiness.ready
+    ]
+    if ready_ides:
+        console.print(f"DevStack-ready launch IDEs: {', '.join(ready_ides)}")
+    else:
+        console.print(
+            "[yellow]Warning:[/yellow] No launch IDE is ready yet. "
+            "Run `pro-ai-server devstack-ide-status`, then install Continue for VS Code or Cursor."
+        )
 
 
 @app.command()

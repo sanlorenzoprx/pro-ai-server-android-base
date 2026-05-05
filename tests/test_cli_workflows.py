@@ -1449,6 +1449,66 @@ def test_configure_continue_warns_when_no_continue_ready_ide_is_detected(monkeyp
     assert "No supported IDE with the Continue extension was detected" in result.output
 
 
+def test_configure_devstack_writes_usb_launch_config_and_ready_ides(monkeypatch, tmp_path):
+    runner = CliRunner()
+
+    monkeypatch.setattr(cli, "default_continue_dir", lambda: tmp_path / ".continue", raising=False)
+    monkeypatch.setattr(
+        cli,
+        "write_continue_config",
+        lambda plan, mode, devstack: ContinueConfigWriteResult(
+            config_path=tmp_path / ".continue" / "config.yaml",
+            backup_path=tmp_path / ".continue" / "config.yaml.pro-ai-server-backup-20260502-131415",
+            api_base="http://localhost:11434",
+        ),
+    )
+    monkeypatch.setattr(
+        cli,
+        "launch_ide_readiness_matrix",
+        lambda: (
+            IdeReadiness(
+                ide=IdeCli(command="cursor", path="C:/bin/cursor.cmd"),
+                launch_supported=True,
+                follow_up=False,
+                continue_installed=True,
+                state="ready",
+                next_action="Run configure-continue.",
+            ),
+        ),
+    )
+
+    result = runner.invoke(cli.app, ["configure-devstack", "--profile", "professional"])
+
+    assert result.exit_code == 0
+    assert "Wrote DevStack Continue config" in result.output
+    assert "API base: http://localhost:11434" in result.output
+    assert "Chat model: qwen2.5-coder:3b" in result.output
+    assert "Autocomplete model: qwen2.5-coder:1.5b-base" in result.output
+    assert "To restore, copy" in result.output
+    assert "DevStack-ready launch IDEs: cursor" in result.output
+
+
+def test_configure_devstack_warns_when_launch_ide_is_not_ready(monkeypatch, tmp_path):
+    runner = CliRunner()
+
+    monkeypatch.setattr(
+        cli,
+        "write_continue_config",
+        lambda plan, mode, devstack: ContinueConfigWriteResult(
+            config_path=tmp_path / ".continue" / "config.yaml",
+            backup_path=None,
+            api_base="http://localhost:11434",
+        ),
+    )
+    monkeypatch.setattr(cli, "launch_ide_readiness_matrix", lambda: ())
+
+    result = runner.invoke(cli.app, ["configure-devstack"])
+
+    assert result.exit_code == 0
+    assert "No launch IDE is ready yet" in result.output
+    assert "devstack-ide-status" in result.output
+
+
 def test_status_prints_concise_readiness_report(monkeypatch):
     runner = CliRunner()
 

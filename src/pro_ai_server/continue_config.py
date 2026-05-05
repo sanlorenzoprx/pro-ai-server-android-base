@@ -11,6 +11,7 @@ from pro_ai_server.models import ModelPlan
 CONTINUE_CONFIG_NAME = "config.yaml"
 BACKUP_TIMESTAMP_FORMAT = "%Y%m%d-%H%M%S"
 VALID_CONNECTION_MODES = {"usb", "lan", "tailscale"}
+DEVSTACK_CONFIG_NAME = "Pro Agentic Coding Server"
 
 
 @dataclass(frozen=True)
@@ -69,11 +70,42 @@ def continue_config_data(plan: ModelPlan, mode: str = "usb", host: str | None = 
     }
 
 
+def devstack_continue_config_data(plan: ModelPlan, mode: str = "usb", host: str | None = None) -> dict[str, object]:
+    data = continue_config_data(plan, mode, host)
+    data["name"] = DEVSTACK_CONFIG_NAME
+    data["metadata"] = {
+        "product": "DevStack",
+        "launch_ides": ["VS Code", "Cursor"],
+        "connection_mode": mode.strip().lower(),
+        "api_base": api_base_for_mode(mode, host),
+        "chat_model": plan.chat_model,
+        "autocomplete_model": plan.autocomplete_model,
+    }
+    return data
+
+
 def render_continue_config_yaml(plan: ModelPlan, mode: str = "usb", host: str | None = None) -> str:
     return yaml.safe_dump(
         continue_config_data(plan, mode, host),
         sort_keys=False,
         allow_unicode=False,
+    )
+
+
+def render_devstack_continue_config_yaml(plan: ModelPlan, mode: str = "usb", host: str | None = None) -> str:
+    return yaml.safe_dump(
+        devstack_continue_config_data(plan, mode, host),
+        sort_keys=False,
+        allow_unicode=False,
+    )
+
+
+def devstack_restore_instructions(result: ContinueConfigWriteResult) -> tuple[str, ...]:
+    if result.backup_path is None:
+        return ("No previous Continue config was present, so no restore action is needed.",)
+    return (
+        f"Backup saved at {result.backup_path}.",
+        f"To restore, copy {result.backup_path} back to {result.config_path}.",
     )
 
 
@@ -92,6 +124,7 @@ def write_continue_config(
     host: str | None = None,
     continue_dir: Path | None = None,
     now: datetime | None = None,
+    devstack: bool = False,
 ) -> ContinueConfigWriteResult:
     target_dir = continue_dir or default_continue_dir()
     target_dir.mkdir(parents=True, exist_ok=True)
@@ -102,7 +135,8 @@ def write_continue_config(
         backup_path = backup_path_for_config(config_path, now)
         shutil.copy2(config_path, backup_path)
 
-    config_path.write_text(render_continue_config_yaml(plan, mode, host), encoding="utf-8")
+    renderer = render_devstack_continue_config_yaml if devstack else render_continue_config_yaml
+    config_path.write_text(renderer(plan, mode, host), encoding="utf-8")
     return ContinueConfigWriteResult(
         config_path=config_path,
         backup_path=backup_path,

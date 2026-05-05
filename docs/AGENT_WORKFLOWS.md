@@ -25,8 +25,12 @@ pro-ai-server install-continue-extension --ide cursor
 After an IDE is ready, write the USB Continue config:
 
 ```powershell
-pro-ai-server configure-continue --mode usb
+pro-ai-server configure-devstack
+pro-ai-server configure-devstack --profile lightweight
+pro-ai-server configure-devstack --ram-gb 4
 ```
+
+The DevStack preset writes Continue config for `http://localhost:11434`, uses the selected hardware profile for chat and autocomplete models, backs up an existing `%USERPROFILE%\.continue\config.yaml`, and prints restore instructions.
 
 ## Prime
 
