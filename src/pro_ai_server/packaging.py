@@ -29,7 +29,7 @@ PYINSTALLER_EXCLUDES: tuple[str, ...] = (
 )
 REQUIRED_CLI_SMOKE_COMMANDS: tuple[tuple[str, ...], ...] = (
     ("doctor",),
-    ("setup", "--production"),
+    ("setup", "--production", "--profile", "lightweight"),
     ("status",),
     ("diagnose", "--output", "diagnostics.txt"),
     ("validate-platform-tools",),
@@ -105,8 +105,7 @@ class WindowsExecutablePackagingPlan:
             "pytest",
             "--exclude-module",
             "ruff",
-            "-m",
-            "pro_ai_server.cli",
+            "build/pyinstaller/pro_ai_server_entry.py",
         )
 
     @property

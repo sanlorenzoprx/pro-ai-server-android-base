@@ -184,15 +184,28 @@ Automation note: use `pro-ai-server install-termux-apps --serial ZY22GKMWPN` to 
 
 ## Packaged Exe Evidence
 
-Record:
+TKT-P22-002 evidence captured on May 5, 2026:
 
-- Artifact path: `dist\pro-ai-server\pro-ai-server.exe`
-- Build command and result.
-- `validate-release` result.
-- No-phone smoke result.
-- With-phone smoke result when available.
-- Bundled ADB validation result.
-- Known packaging limitations.
+| Check | Result | Evidence |
+| --- | --- | --- |
+| Artifact path | Passed | `dist\pro-ai-server\pro-ai-server.exe` |
+| Build command | Passed | `.\scripts\build-windows-exe.ps1` completed successfully. |
+| Source release validation | Passed | `validate-release` confirmed ADB runtime files, package data, and CI gates. |
+| Full test suite | Passed | 413 pytest tests passed during the build script. |
+| Bundled ADB validation | Passed | Packaged `doctor` resolved ADB from `dist\pro-ai-server\_internal\pro_ai_server\embedded-tools\windows\platform-tools\adb.exe`. |
+| No-phone smoke | Passed | Packaged `setup --production --profile lightweight` produced the production installer plan without device writes. |
+| With-phone smoke | Partial pass | Packaged `status` and `diagnose` detected phone `ZY22GKMWPN`; USB tunnel and Ollama endpoint are not active yet. |
+
+Packaging fixes applied for the RC smoke:
+
+- Build from generated entrypoint `build\pyinstaller\pro_ai_server_entry.py` instead of passing `-m pro_ai_server.cli` to PyInstaller.
+- Resolve `embedded-tools\windows\platform-tools` to an absolute path before PyInstaller `--add-data`.
+- Use `setup --production --profile lightweight` for deterministic no-phone RC smoke.
+
+Known limitations:
+
+- Full customer-promise smoke remains blocked until the phone has Termux, Termux:API, Ollama, selected models, and an active USB tunnel.
+- The build smoke writes transient `diagnostics.txt`; it is evidence scratch output, not a release artifact.
 
 ## Live IDE Evidence
 

@@ -86,7 +86,9 @@ def test_windows_executable_packaging_plan_defines_build_and_smoke_commands():
     assert "--collect-data" in plan.pyinstaller_command
     assert "pro_ai_server" in plan.pyinstaller_command
     assert "--exclude-module" in plan.pyinstaller_command
-    assert (WINDOWS_EXE_DIST_PATH.as_posix(), "setup", "--production") in plan.smoke_commands
+    assert "build/pyinstaller/pro_ai_server_entry.py" in plan.pyinstaller_command
+    assert "-m" not in plan.pyinstaller_command
+    assert (WINDOWS_EXE_DIST_PATH.as_posix(), "setup", "--production", "--profile", "lightweight") in plan.smoke_commands
     assert (WINDOWS_EXE_DIST_PATH.as_posix(), "validate-platform-tools") in plan.smoke_commands
 
 
