@@ -64,6 +64,7 @@ def test_receipt_captures_script_push_and_tunnel():
     assert receipt.pushed_scripts is True
     assert receipt.tunnel_requested is True
     assert receipt.post_push_termux_commands == (
+        "~/bootstrap-phone-stack.sh",
         "~/bootstrap.sh",
         "~/install-models.sh",
         "~/start-pro-ai-server.sh",

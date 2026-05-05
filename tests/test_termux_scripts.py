@@ -4,8 +4,10 @@ import pytest
 
 from pro_ai_server.termux_scripts import (
     generate_debian_ollama_setup_script,
+    generate_phone_stack_bootstrap_script,
     generate_start_script,
     generate_termux_scripts,
+    generate_termux_properties,
     generate_widget_shortcut_script,
     write_termux_scripts,
 )
@@ -24,6 +26,8 @@ def test_generates_deterministic_termux_scripts_for_usb_mode():
         Path("generated/termux/setup-ollama-debian.sh"),
         Path("generated/termux/start-pro-ai-server.sh"),
         Path("generated/termux/install-models.sh"),
+        Path("generated/termux/bootstrap-phone-stack.sh"),
+        Path("generated/termux/.termux/termux.properties"),
         Path("generated/termux/.shortcuts/Start Pro AI Server"),
         Path("generated/termux/ANDROID_OPTIMIZATION_CHECKLIST.txt"),
         Path("generated/termux/TERMUX_WIDGET_INSTRUCTIONS.txt"),
@@ -43,6 +47,8 @@ def test_generates_deterministic_termux_scripts_for_usb_mode():
         'echo "  ~/start-pro-ai-server.sh"\n'
     )
     assert bundle.files[Path("generated/termux/setup-ollama-debian.sh")] == generate_debian_ollama_setup_script()
+    assert bundle.files[Path("generated/termux/bootstrap-phone-stack.sh")] == generate_phone_stack_bootstrap_script()
+    assert bundle.files[Path("generated/termux/.termux/termux.properties")] == generate_termux_properties()
     assert "export OLLAMA_HOST=127.0.0.1:11434; ollama serve" in bundle.files[
         Path("generated/termux/start-pro-ai-server.sh")
     ]
@@ -89,6 +95,23 @@ def test_install_models_deduplicates_model_pulls():
     install_script = bundle.files[Path("generated/termux/install-models.sh")]
 
     assert install_script.count("ollama pull qwen2.5-coder:3b") == 1
+
+
+def test_phone_stack_bootstrap_runs_full_local_ai_stack_and_starts_server():
+    script = generate_phone_stack_bootstrap_script()
+
+    assert "~/bootstrap.sh" in script
+    assert "setup-ollama-debian.sh" in script
+    assert "~/install-models.sh" in script
+    assert "nohup ~/start-pro-ai-server.sh" in script
+    assert "pro-ai-server-bootstrap.log" in script
+
+
+def test_termux_properties_allow_external_apps_for_run_command():
+    properties = generate_termux_properties()
+
+    assert "allow-external-apps = true" in properties
+    assert "Managed by Pro AI Server" in properties
 
 
 def test_widget_shortcut_calls_start_script_and_instructions_are_generated():

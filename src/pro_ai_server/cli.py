@@ -69,7 +69,12 @@ from pro_ai_server.agent.ticketizer import (
 )
 from pro_ai_server.android_compatibility import assess_android_compatibility, render_android_compatibility
 from pro_ai_server.android_compatibility import AndroidCompatibilityResult
-from pro_ai_server.continue_config import devstack_restore_instructions, exposure_warnings, write_continue_config
+from pro_ai_server.continue_config import (
+    api_base_for_mode,
+    devstack_restore_instructions,
+    exposure_warnings,
+    write_continue_config,
+)
 from pro_ai_server.device_scan import (
     DeviceScanOutputs,
     build_device_profile_from_scan_outputs,
@@ -112,6 +117,7 @@ from pro_ai_server.status import build_status_report, render_status_report
 from pro_ai_server.termux_readiness import (
     TERMUX_API_PACKAGE,
     TERMUX_PACKAGE,
+    TermuxReadinessResult,
     assess_termux_readiness,
     build_package_installer_command,
     build_termux_package_info_command,
@@ -119,7 +125,7 @@ from pro_ai_server.termux_readiness import (
     parse_package_installer,
     parse_pm_path_installed,
 )
-from pro_ai_server.termux_scripts import generate_termux_scripts, write_termux_scripts
+from pro_ai_server.termux_scripts import PHONE_STACK_BOOTSTRAP_SCRIPT, generate_termux_scripts, write_termux_scripts
 from pro_ai_server.tailscale import build_tailscale_install_plan
 from pro_ai_server.tailscale import tailscale_android_installed
 from pro_ai_server.tailscale import tailscale_host_installed
@@ -822,6 +828,149 @@ def _install_or_open_termux_app(
         )
     )
     console.print(f"[yellow]Opened[/yellow] {label} F-Droid page on Android device {serial}.")
+
+
+def _validate_local_apks(
+    *,
+    fdroid_apk: Path | None,
+    termux_apk: Path | None,
+    termux_api_apk: Path | None,
+) -> None:
+    for label, apk in (("F-Droid", fdroid_apk), ("Termux", termux_apk), ("Termux:API", termux_api_apk)):
+        if apk is not None and not apk.exists():
+            console.print(f"[red]{label} APK not found:[/red] {apk}")
+            raise typer.Exit(code=1)
+
+
+def _resolve_setup_apks(
+    *,
+    fdroid_apk: Path | None,
+    fdroid_url: str | None,
+    fdroid_sha256: str | None,
+    termux_apk: Path | None,
+    termux_url: str | None,
+    termux_sha256: str | None,
+    termux_api_apk: Path | None,
+    termux_api_url: str | None,
+    termux_api_sha256: str | None,
+    apk_cache_dir: Path,
+) -> tuple[Path | None, Path | None, Path | None]:
+    return (
+        _resolve_downloaded_apk(
+            label="F-Droid",
+            local_apk=fdroid_apk,
+            url=fdroid_url,
+            sha256=fdroid_sha256,
+            cache_dir=apk_cache_dir,
+        ),
+        _resolve_downloaded_apk(
+            label="Termux",
+            local_apk=termux_apk,
+            url=termux_url,
+            sha256=termux_sha256,
+            cache_dir=apk_cache_dir,
+        ),
+        _resolve_downloaded_apk(
+            label="Termux:API",
+            local_apk=termux_api_apk,
+            url=termux_api_url,
+            sha256=termux_api_sha256,
+            cache_dir=apk_cache_dir,
+        ),
+    )
+
+
+def _install_termux_apps_for_setup(
+    *,
+    adb: str,
+    serial: str,
+    fdroid_apk: Path | None,
+    termux_apk: Path | None,
+    termux_api_apk: Path | None,
+    yes: bool,
+) -> None:
+    _install_fdroid_app(adb=adb, serial=serial, apk=fdroid_apk, yes=yes)
+    _open_fdroid_unknown_app_permission(adb, serial)
+    _install_or_open_termux_app(
+        adb=adb,
+        serial=serial,
+        label="Termux",
+        package_name=TERMUX_PACKAGE,
+        apk=termux_apk,
+        fdroid_url=TERMUX_FDROID_URL,
+        yes=yes,
+    )
+    _install_or_open_termux_app(
+        adb=adb,
+        serial=serial,
+        label="Termux:API",
+        package_name=TERMUX_API_PACKAGE,
+        apk=termux_api_apk,
+        fdroid_url=TERMUX_API_FDROID_URL,
+        yes=yes,
+    )
+
+
+def _open_termux_once(adb: str, serial: str) -> None:
+    output = run_optional_command(adb_command(adb, ["shell", "monkey", "-p", TERMUX_PACKAGE, "1"], serial))
+    if "monkey aborted" in output.lower() or "no activities found" in output.lower():
+        console.print("[yellow]Termux could not be opened yet; approve/install it on the phone first.[/yellow]")
+        return
+    console.print("[yellow]Opened[/yellow] Termux once to request home initialization.")
+
+
+def _assess_termux_readiness_for_setup(adb: str, serial: str) -> TermuxReadinessResult:
+    readiness_outputs = [
+        run_optional_command([adb, *list(command[1:])])
+        for command in build_termux_readiness_commands(serial)
+    ]
+    package_info = run_optional_command([adb, *list(build_termux_package_info_command(serial)[1:])])
+    return assess_termux_readiness(*readiness_outputs, package_info_output=package_info)
+
+
+def _print_termux_readiness_result(result: TermuxReadinessResult) -> None:
+    if result.version_hint:
+        console.print(f"Termux version: {result.version_hint}")
+    for check in result.checks:
+        status = "[green]OK[/green]" if check.ok else "[yellow]Needs attention[/yellow]"
+        console.print(f"{status} {check.name}")
+        if check.warning:
+            console.print(f"  Warning: {check.warning}")
+        if check.instruction:
+            console.print(f"  Next: {check.instruction}")
+
+
+def _request_termux_phone_stack(adb: str, serial: str, remote_home: str) -> str:
+    home = remote_home.rstrip("/")
+    command = adb_command(
+        adb,
+        [
+            "shell",
+            "am",
+            "startservice",
+            "--user",
+            "0",
+            "-n",
+            "com.termux/com.termux.app.RunCommandService",
+            "-a",
+            "com.termux.RUN_COMMAND",
+            "--es",
+            "com.termux.RUN_COMMAND_PATH",
+            f"~/{PHONE_STACK_BOOTSTRAP_SCRIPT}",
+            "--es",
+            "com.termux.RUN_COMMAND_WORKDIR",
+            home,
+            "--ez",
+            "com.termux.RUN_COMMAND_BACKGROUND",
+            "true",
+        ],
+        serial,
+    )
+    output = run_command(command)
+    console.print(f"[green]Requested[/green] Termux phone stack bootstrap on device {serial}.")
+    console.print(f"Bootstrap log: {home}/pro-ai-server-bootstrap.log")
+    console.print(f"Server log: {home}/pro-ai-server.log")
+    return output
 
 
 @app.command()
@@ -1609,6 +1758,42 @@ def setup(
     output_dir: Path = typer.Option(Path("."), help="Directory where generated/termux will be written."),
     remote_home: str = typer.Option("/data/data/com.termux/files/home", help="Remote Termux home directory."),
     serial: str | None = typer.Option(None, help="ADB device serial to use when multiple phones are connected."),
+    auto_install_termux: bool = typer.Option(
+        True,
+        "--auto-install-termux/--no-auto-install-termux",
+        help="In production execute mode, install/open F-Droid, Termux, and Termux:API before script push.",
+    ),
+    start_phone_stack: bool = typer.Option(
+        True,
+        "--start-phone-stack/--no-start-phone-stack",
+        help="In production execute mode, request the Termux one-command phone stack bootstrap runner.",
+    ),
+    fdroid_apk: Path | None = typer.Option(None, "--fdroid-apk", help="Optional local F-Droid APK to install."),
+    fdroid_url: str | None = typer.Option(None, "--fdroid-url", help="Optional pinned F-Droid APK URL to download."),
+    fdroid_sha256: str | None = typer.Option(None, "--fdroid-sha256", help="Expected SHA-256 for --fdroid-url."),
+    termux_apk: Path | None = typer.Option(None, "--termux-apk", help="Optional local Termux APK to install."),
+    termux_url: str | None = typer.Option(None, "--termux-url", help="Optional pinned Termux APK URL to download."),
+    termux_sha256: str | None = typer.Option(None, "--termux-sha256", help="Expected SHA-256 for --termux-url."),
+    termux_api_apk: Path | None = typer.Option(
+        None,
+        "--termux-api-apk",
+        help="Optional local Termux:API APK to install.",
+    ),
+    termux_api_url: str | None = typer.Option(
+        None,
+        "--termux-api-url",
+        help="Optional pinned Termux:API APK URL to download.",
+    ),
+    termux_api_sha256: str | None = typer.Option(
+        None,
+        "--termux-api-sha256",
+        help="Expected SHA-256 for --termux-api-url.",
+    ),
+    apk_cache_dir: Path = typer.Option(
+        Path(".cache") / "pro-ai-server" / "apks",
+        "--apk-cache-dir",
+        help="Directory for downloaded APK files.",
+    ),
 ) -> None:
     """Plan or execute the guided MVP setup workflow."""
     try:
@@ -1618,6 +1803,7 @@ def setup(
         if production and mode.strip().lower() == "usb" and profile_name is None and ram_gb is None:
             compatibility_result = _scan_android_compatibility_for_setup(serial)
             compatibility_profile = _production_profile_from_compatibility(compatibility_result)
+        effective_push = push or production
         plan = plan_setup_workflow(
             mode=mode,
             host=host,
@@ -1625,7 +1811,7 @@ def setup(
             profile=compatibility_profile or profile_name,
             configure_continue=configure_continue_config,
             create_usb_tunnel=create_usb_tunnel,
-            push_scripts=push,
+            push_scripts=effective_push,
             generated_termux_dir=output_dir / "generated" / "termux",
             remote_termux_home=remote_home,
             serial=serial,
@@ -1638,7 +1824,7 @@ def setup(
                 profile=compatibility_profile or profile_name,
                 configure_continue=configure_continue_config,
                 create_usb_tunnel=create_usb_tunnel,
-                push_scripts=push,
+                push_scripts=effective_push,
                 generated_termux_dir=output_dir / "generated" / "termux",
                 remote_termux_home=remote_home,
                 serial=serial,
@@ -1689,6 +1875,12 @@ def setup(
         selected_serial = None
         delivery_plan = None
         tunnel_requested = False
+        ollama_status = None
+        model_inventory_status = None
+        test_prompt_status = None
+        resolved_fdroid_apk = fdroid_apk
+        resolved_termux_apk = termux_apk
+        resolved_termux_api_apk = termux_api_apk
 
         bundle = generate_termux_scripts(
             plan.model_plan.chat_model,
@@ -1704,17 +1896,60 @@ def setup(
             if continue_result.backup_path:
                 console.print(f"Backup: {continue_result.backup_path}")
 
-        if push or (create_usb_tunnel is not False and plan.mode == "usb"):
+        if production and auto_install_termux:
+            _validate_local_apks(
+                fdroid_apk=fdroid_apk,
+                termux_apk=termux_apk,
+                termux_api_apk=termux_api_apk,
+            )
+            resolved_fdroid_apk, resolved_termux_apk, resolved_termux_api_apk = _resolve_setup_apks(
+                fdroid_apk=fdroid_apk,
+                fdroid_url=fdroid_url,
+                fdroid_sha256=fdroid_sha256,
+                termux_apk=termux_apk,
+                termux_url=termux_url,
+                termux_sha256=termux_sha256,
+                termux_api_apk=termux_api_apk,
+                termux_api_url=termux_api_url,
+                termux_api_sha256=termux_api_sha256,
+                apk_cache_dir=apk_cache_dir,
+            )
+
+        if effective_push or (create_usb_tunnel is not False and plan.mode == "usb"):
             adb = resolve_adb()
             if not adb:
                 console.print("[red]adb not found. Release builds should include bundled platform-tools.[/red]")
                 raise typer.Exit(code=1)
             selected_serial = select_device_serial(adb, serial)
 
-            if push:
+            if production and auto_install_termux:
+                _install_termux_apps_for_setup(
+                    adb=adb,
+                    serial=selected_serial,
+                    fdroid_apk=resolved_fdroid_apk,
+                    termux_apk=resolved_termux_apk,
+                    termux_api_apk=resolved_termux_api_apk,
+                    yes=yes,
+                )
+                _open_termux_once(adb, selected_serial)
+                termux_readiness = _assess_termux_readiness_for_setup(adb, selected_serial)
+                _print_termux_readiness_result(termux_readiness)
+                if not termux_readiness.ok:
+                    console.print(
+                        "[red]Production setup paused before script push because Termux is not ready.[/red]"
+                    )
+                    console.print(
+                        "Approve any Android install prompts, open Termux once, then rerun setup --production --execute --yes."
+                    )
+                    raise typer.Exit(code=1)
+
+            if effective_push:
                 delivery_plan = build_script_delivery_plan(output_dir / "generated" / "termux", remote_home, selected_serial)
                 run_command(
                     adb_command(adb, ["shell", "mkdir", "-p", f"{remote_home.rstrip('/')}/.shortcuts"], selected_serial)
+                )
+                run_command(
+                    adb_command(adb, ["shell", "mkdir", "-p", f"{remote_home.rstrip('/')}/.termux"], selected_serial)
                 )
                 for command in delivery_plan.commands:
                     run_command([adb, *list(command[1:])])
@@ -1723,10 +1958,37 @@ def setup(
                 for command in delivery_plan.post_push_termux_commands:
                     console.print(f"  {command}")
 
+            if production and start_phone_stack and delivery_plan is not None:
+                try:
+                    _request_termux_phone_stack(adb, selected_serial, remote_home)
+                except CommandError as exc:
+                    console.print("[yellow]Android blocked Termux RUN_COMMAND automation.[/yellow]")
+                    console.print(str(exc))
+                    console.print(f"Open Termux and run: ~/{PHONE_STACK_BOOTSTRAP_SCRIPT}")
+
             if create_usb_tunnel is not False and plan.mode == "usb":
                 run_command(adb_command(adb, ["reverse", "tcp:11434", "tcp:11434"], selected_serial))
                 tunnel_requested = True
                 console.print(f"[green]ADB reverse tunnel requested for device {selected_serial}.[/green]")
+
+        if production:
+            api_base = api_base_for_mode(plan.mode, plan.host)
+            tags_output = run_optional_command(list(build_ollama_tags_command(api_base)))
+            ollama_status = assess_ollama_server_status(tags_output)
+            model_inventory_status = assess_model_inventory(plan.model_plan, tags_output)
+            generate_output = run_optional_command(
+                list(build_ollama_generate_command(plan.model_plan.chat_model, api_base_url=api_base))
+            )
+            test_prompt_status = assess_ollama_test_prompt_response(plan.model_plan.chat_model, generate_output)
+            if ollama_status.ok and model_inventory_status.ok and test_prompt_status.ok:
+                console.print("[green]Production endpoint verified.[/green]")
+            else:
+                console.print("[yellow]Production endpoint is not verified yet.[/yellow]")
+                for status in (ollama_status, model_inventory_status, test_prompt_status):
+                    for warning in status.warnings:
+                        console.print(f"[yellow]Warning:[/yellow] {warning}")
+                    for instruction in status.instructions:
+                        console.print(f"Next: {instruction}")
         receipt = build_setup_receipt(
             workflow_plan=plan,
             continue_result=continue_result,
@@ -1734,9 +1996,12 @@ def setup(
             written_termux_paths=written,
             delivery_plan=delivery_plan,
             selected_device_serial=selected_serial,
-            pushed_scripts=push,
+            pushed_scripts=effective_push,
             tunnel_requested=tunnel_requested,
             production_plan=production_plan,
+            ollama_status=ollama_status,
+            model_inventory_status=model_inventory_status,
+            test_prompt_status=test_prompt_status,
         )
         console.print(render_setup_receipt(receipt))
     except CommandError as exc:

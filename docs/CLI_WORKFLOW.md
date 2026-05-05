@@ -106,6 +106,14 @@ The same pinned-download pattern is available for Termux and Termux:API with `--
 
 After installing, open Termux once on the phone so its home directory initializes, then rerun `termux-check`.
 
+Production execute can use the same trusted APK lane directly:
+
+```powershell
+pro-ai-server setup --production --execute --yes --serial <device-serial> --fdroid-apk C:\path\to\fdroid.apk --termux-apk C:\path\to\termux.apk --termux-api-apk C:\path\to\termux-api.apk
+```
+
+Pinned downloads are also accepted on `setup --production --execute --yes` with `--fdroid-url`, `--fdroid-sha256`, `--termux-url`, `--termux-sha256`, `--termux-api-url`, and `--termux-api-sha256`. Setup pauses before script push if Android still requires install approval or Termux home initialization.
+
 ## 6. Generate Termux Scripts
 
 ```powershell
@@ -115,8 +123,10 @@ pro-ai-server generate-scripts --mode usb
 This writes inspectable files under `generated/termux`, including:
 
 - `bootstrap.sh`
+- `bootstrap-phone-stack.sh`
 - `start-pro-ai-server.sh`
 - `install-models.sh`
+- `.termux/termux.properties`
 - `.shortcuts/Start Pro AI Server`
 - `ANDROID_OPTIMIZATION_CHECKLIST.txt`
 - `TERMUX_WIDGET_INSTRUCTIONS.txt`
@@ -135,7 +145,7 @@ With multiple devices:
 pro-ai-server push-scripts --serial <device-serial>
 ```
 
-The CLI uses `adb push` to copy generated files to the Termux home directory and creates the `.shortcuts` folder. After pushing, run the printed commands inside Termux.
+The CLI uses `adb push` to copy generated files to the Termux home directory and creates the `.shortcuts` and `.termux` folders. After pushing, run `~/bootstrap-phone-stack.sh` inside Termux for the one-command phone stack path, or run the individual printed commands if Android blocks RUN_COMMAND automation.
 
 Termux:Widget still requires manual installation and placement: install Termux:Widget on Android, add the generated `Start Pro AI Server` shortcut to `~/.shortcuts`, then place the widget/shortcut on the Android home screen.
 

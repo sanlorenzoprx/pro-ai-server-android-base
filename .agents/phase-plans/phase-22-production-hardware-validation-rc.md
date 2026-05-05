@@ -22,6 +22,7 @@ Move Pro AI Server and Pro Agentic Coding Server from build-ready to release-can
 | TKT-P22-001E | Use compatibility model tier in production setup | TKT-P22-001D |
 | TKT-P22-002 | Packaged Windows exe release-candidate smoke | TKT-P22-001 |
 | TKT-P22-003 | Live Continue IDE validation | TKT-P22-001, TKT-P22-002 |
+| TKT-P22-003A | End-to-end phone stack bootstrap execution | TKT-P22-003 |
 | TKT-P22-004 | Release evidence bundle | TKT-P22-002, TKT-P22-003 |
 | TKT-P22-005 | RC go/no-go closeout | TKT-P22-004 |
 
@@ -32,6 +33,7 @@ Move Pro AI Server and Pro Agentic Coding Server from build-ready to release-can
 - `.agents/contracts/phase-22/android-compatibility-contract.md`
 - `.agents/contracts/phase-22/windows-rc-contract.md`
 - `.agents/contracts/phase-22/ide-live-validation-contract.md`
+- `.agents/contracts/phase-22/phone-stack-bootstrap-contract.md`
 - `.agents/contracts/phase-22/release-evidence-contract.md`
 - `.agents/contracts/phase-22/rc-go-no-go-contract.md`
 

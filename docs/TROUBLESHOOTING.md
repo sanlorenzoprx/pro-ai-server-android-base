@@ -72,6 +72,14 @@ pro-ai-server install-termux-apps --serial <device-serial> --fdroid-apk C:\path\
 
 The helper refuses APK downloads without a SHA-256 and removes files that fail checksum verification.
 
+The production setup command can also drive this lane:
+
+```powershell
+pro-ai-server setup --production --execute --yes --serial <device-serial> --fdroid-apk C:\path\to\fdroid.apk --termux-apk C:\path\to\termux.apk --termux-api-apk C:\path\to\termux-api.apk
+```
+
+If setup pauses before script push, approve any Android install prompts, open Termux once, and rerun the same setup command. This is a recoverable Android stop, not a silent success.
+
 Termux:Widget manual placement is still required. Install Termux:Widget, confirm the generated `Start Pro AI Server` shortcut is in `~/.shortcuts`, then add the widget or shortcut from the Android home screen.
 
 ### Production installer stops at Termux readiness
@@ -84,6 +92,16 @@ pro-ai-server termux-check
 ```
 
 Install Termux and Termux:API from the same trusted source. Open Termux once before rerunning setup so the Termux home directory exists.
+
+### Android blocks the Termux phone stack runner
+
+Production setup pushes `bootstrap-phone-stack.sh` and requests it through Termux's RUN_COMMAND service. If Android or Termux blocks that request, open Termux and run:
+
+```sh
+~/bootstrap-phone-stack.sh
+```
+
+The runner writes `~/pro-ai-server-bootstrap.log`, starts the server with `~/start-pro-ai-server.sh`, and writes server output to `~/pro-ai-server.log`.
 
 ## Ollama and Models
 

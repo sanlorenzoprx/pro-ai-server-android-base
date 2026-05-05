@@ -37,6 +37,7 @@ scripts/smoke-production-installer.ps1 -WithPhone
 pro-ai-server android-compatibility --serial ZY22GKMWPN
 pro-ai-server setup --execute --yes
 pro-ai-server install-termux-apps --serial ZY22GKMWPN
+pro-ai-server setup --production --execute --yes --serial ZY22GKMWPN --termux-apk C:\path\to\termux.apk --termux-api-apk C:\path\to\termux-api.apk
 pro-ai-server tunnel
 pro-ai-server test-prompt
 pro-ai-server status
@@ -113,6 +114,7 @@ Recovery log:
 | Compatibility tier differs from scan model recommendation | Added `android-compatibility` to apply conservative production model lane | Moto g 5G is supported yellow/lightweight despite scan recommending professional | No |
 | Production setup could use raw scanner profile | Updated `setup --production` to use compatibility model tier unless `--profile` or `--ram-gb` is explicitly provided | Yellow devices default to lightweight production profile | No |
 | Termux missing | Added `install-termux-apps`; F-Droid is installed and the command opens Termux and Termux:API package pages or installs supplied APKs with `--yes` | Blocked until Termux and Termux:API are installed and opened once | Yes |
+| Setup did not drive phone-side stack | Added TKT-P22-003A so `setup --production --execute --yes` can install/open Termux apps, verify readiness, push scripts, request `bootstrap-phone-stack.sh`, and verify endpoint/test prompt | Source implementation complete; live phone remains blocked until Termux/Termux:API install is approved or supplied via trusted APKs | Yes |
 | Ollama unavailable | Ran `status`, `server-check`, and `test-prompt` after USB tunnel | Blocked until phone-side Ollama server is installed and running | Yes |
 
 ## Hardware Smoke Attempts

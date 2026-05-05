@@ -10,7 +10,9 @@ USB_OLLAMA_HOST = "127.0.0.1:11434"
 NETWORK_OLLAMA_HOST = "0.0.0.0:11434"
 DEFAULT_SCRIPT_DIR = Path("generated") / "termux"
 WIDGET_SHORTCUT_PATH = Path(".shortcuts") / "Start Pro AI Server"
+TERMUX_PROPERTIES_PATH = Path(".termux") / "termux.properties"
 DEBIAN_OLLAMA_SETUP_SCRIPT = "setup-ollama-debian.sh"
+PHONE_STACK_BOOTSTRAP_SCRIPT = "bootstrap-phone-stack.sh"
 
 
 @dataclass(frozen=True)
@@ -126,6 +128,43 @@ def generate_install_models_script(chat_model: str, autocomplete_model: str) -> 
     )
 
 
+def generate_phone_stack_bootstrap_script() -> str:
+    return "\n".join(
+        [
+            "#!/data/data/com.termux/files/usr/bin/bash",
+            "set -euo pipefail",
+            "",
+            'LOG="$HOME/pro-ai-server-bootstrap.log"',
+            'SERVER_LOG="$HOME/pro-ai-server.log"',
+            'PID_FILE="$HOME/pro-ai-server.pid"',
+            "",
+            "{",
+            '  echo "[$(date -Is)] Starting Pro AI Server phone stack bootstrap."',
+            "  ~/bootstrap.sh",
+            f"  proot-distro login debian -- bash /data/data/com.termux/files/home/{DEBIAN_OLLAMA_SETUP_SCRIPT}",
+            "  ~/install-models.sh",
+            '  echo "[$(date -Is)] Starting Pro AI Server Ollama process."',
+            '} >> "$LOG" 2>&1',
+            "",
+            'nohup ~/start-pro-ai-server.sh >> "$SERVER_LOG" 2>&1 &',
+            'echo "$!" > "$PID_FILE"',
+            'echo "Pro AI Server phone stack bootstrap requested. Logs: $LOG and $SERVER_LOG"',
+            "",
+        ]
+    )
+
+
+def generate_termux_properties() -> str:
+    return "\n".join(
+        [
+            "# Managed by Pro AI Server.",
+            "# Allows the installer to request approved Termux scripts through RUN_COMMAND.",
+            "allow-external-apps = true",
+            "",
+        ]
+    )
+
+
 def generate_widget_shortcut_script() -> str:
     return "\n".join(
         [
@@ -151,6 +190,8 @@ def generate_termux_scripts(
         script_dir / DEBIAN_OLLAMA_SETUP_SCRIPT: generate_debian_ollama_setup_script(),
         script_dir / "start-pro-ai-server.sh": generate_start_script(normalized),
         script_dir / "install-models.sh": generate_install_models_script(chat_model, autocomplete_model),
+        script_dir / PHONE_STACK_BOOTSTRAP_SCRIPT: generate_phone_stack_bootstrap_script(),
+        script_dir / TERMUX_PROPERTIES_PATH: generate_termux_properties(),
         script_dir / WIDGET_SHORTCUT_PATH: generate_widget_shortcut_script(),
         script_dir / "ANDROID_OPTIMIZATION_CHECKLIST.txt": "\n".join(android_battery_optimization_checklist()) + "\n",
         script_dir / "TERMUX_WIDGET_INSTRUCTIONS.txt": termux_widget_instructions() + "\n",

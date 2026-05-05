@@ -156,6 +156,134 @@ def test_setup_execute_refuses_continue_config_without_yes():
     assert "Refusing to execute without --yes" in result.output
 
 
+def test_setup_production_execute_installs_pushes_requests_phone_stack_and_verifies_endpoint(monkeypatch, tmp_path):
+    runner = CliRunner()
+    termux_apk = tmp_path / "termux.apk"
+    termux_api_apk = tmp_path / "termux-api.apk"
+    termux_apk.write_text("apk", encoding="utf-8")
+    termux_api_apk.write_text("apk", encoding="utf-8")
+    commands = []
+    installed_packages = {"org.fdroid.fdroid"}
+
+    def fake_run(command, capture_output, text):
+        import subprocess
+
+        commands.append(command)
+        if command == ["adb", "devices"]:
+            return subprocess.CompletedProcess(command, 0, stdout="List of devices attached\nABC123\tdevice\n", stderr="")
+        if command == ["adb", "-s", "ABC123", "shell", "pm", "path", "org.fdroid.fdroid"]:
+            return subprocess.CompletedProcess(command, 0, stdout="package:/data/app/org.fdroid.fdroid/base.apk", stderr="")
+        if command in (
+            ["adb", "-s", "ABC123", "shell", "pm", "path", "com.termux"],
+            ["adb", "-s", "ABC123", "shell", "pm", "path", "com.termux.api"],
+        ):
+            if command[-1] in installed_packages:
+                return subprocess.CompletedProcess(command, 0, stdout=f"package:/data/app/{command[-1]}/base.apk", stderr="")
+            return subprocess.CompletedProcess(command, 1, stdout="", stderr="package not found")
+        if command == ["adb", "-s", "ABC123", "install", "-r", str(termux_apk)]:
+            installed_packages.add("com.termux")
+            return subprocess.CompletedProcess(command, 0, stdout="Success", stderr="")
+        if command == ["adb", "-s", "ABC123", "install", "-r", str(termux_api_apk)]:
+            installed_packages.add("com.termux.api")
+            return subprocess.CompletedProcess(command, 0, stdout="Success", stderr="")
+        if command[:5] == ["adb", "-s", "ABC123", "shell", "pm"] and command[-1] in {"com.termux", "com.termux.api"}:
+            return subprocess.CompletedProcess(command, 0, stdout=f"package:/data/app/{command[-1]}/base.apk", stderr="")
+        if command[:6] == ["adb", "-s", "ABC123", "shell", "test", "-d"]:
+            return subprocess.CompletedProcess(command, 0, stdout="yes", stderr="")
+        if command == ["adb", "-s", "ABC123", "shell", "dumpsys", "package", "com.termux"]:
+            return subprocess.CompletedProcess(command, 0, stdout="versionName=0.118.1", stderr="")
+        if command == ["curl", "--silent", "--show-error", "http://localhost:11434/api/tags"]:
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout='{"models":[{"name":"qwen2.5-coder:1.5b"},{"name":"qwen2.5-coder:0.5b"}]}',
+                stderr="",
+            )
+        if command[:7] == ["curl", "--silent", "--show-error", "-X", "POST", "-H", "Content-Type: application/json"]:
+            return subprocess.CompletedProcess(command, 0, stdout='{"response":"pro-ai-server-ready"}', stderr="")
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(cli, "resolve_adb", lambda: "adb")
+    monkeypatch.setattr(cli.subprocess, "run", fake_run)
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "setup",
+            "--production",
+            "--execute",
+            "--yes",
+            "--profile",
+            "lightweight",
+            "--no-continue",
+            "--no-tunnel",
+            "--termux-apk",
+            str(termux_apk),
+            "--termux-api-apk",
+            str(termux_api_apk),
+            "--output-dir",
+            str(tmp_path),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert ["adb", "-s", "ABC123", "install", "-r", str(termux_apk)] in commands
+    assert ["adb", "-s", "ABC123", "install", "-r", str(termux_api_apk)] in commands
+    assert any(command[:4] == ["adb", "-s", "ABC123", "push"] and "bootstrap-phone-stack.sh" in command[4] for command in commands)
+    assert any(any("RunCommandService" in part for part in command) for command in commands)
+    assert "Requested" in result.output
+    assert "Production endpoint verified" in result.output
+    assert "Test prompt" in result.output
+
+
+def test_setup_production_execute_pauses_before_push_when_termux_is_not_ready(monkeypatch, tmp_path):
+    runner = CliRunner()
+    commands = []
+
+    def fake_run(command, capture_output, text):
+        import subprocess
+
+        commands.append(command)
+        if command == ["adb", "devices"]:
+            return subprocess.CompletedProcess(command, 0, stdout="List of devices attached\nABC123\tdevice\n", stderr="")
+        if command == ["adb", "-s", "ABC123", "shell", "pm", "path", "org.fdroid.fdroid"]:
+            return subprocess.CompletedProcess(command, 0, stdout="package:/data/app/org.fdroid.fdroid/base.apk", stderr="")
+        if command in (
+            ["adb", "-s", "ABC123", "shell", "pm", "path", "com.termux"],
+            ["adb", "-s", "ABC123", "shell", "pm", "path", "com.termux.api"],
+        ):
+            return subprocess.CompletedProcess(command, 1, stdout="", stderr="package not found")
+        if command[:6] == ["adb", "-s", "ABC123", "shell", "test", "-d"]:
+            return subprocess.CompletedProcess(command, 0, stdout="no", stderr="")
+        if command == ["adb", "-s", "ABC123", "shell", "monkey", "-p", "com.termux", "1"]:
+            return subprocess.CompletedProcess(command, 1, stdout="monkey aborted", stderr="")
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(cli, "resolve_adb", lambda: "adb")
+    monkeypatch.setattr(cli.subprocess, "run", fake_run)
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "setup",
+            "--production",
+            "--execute",
+            "--yes",
+            "--profile",
+            "lightweight",
+            "--no-continue",
+            "--no-tunnel",
+            "--output-dir",
+            str(tmp_path),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "Production setup paused before script push" in result.output
+    assert "Termux is not installed" in result.output
+    assert not any(command[:4] == ["adb", "-s", "ABC123", "push"] for command in commands)
+
+
 def test_diagnose_writes_output_file(tmp_path, monkeypatch):
     runner = CliRunner()
     output_path = tmp_path / "diagnostics.txt"

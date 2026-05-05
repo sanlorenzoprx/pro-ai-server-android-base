@@ -86,6 +86,8 @@ def test_cli_workflow_documents_windows_first_flow_and_safety_claims():
         "--termux-api-apk",
         "--termux-url",
         "--termux-sha256",
+        "bootstrap-phone-stack.sh",
+        ".termux/termux.properties",
         "install unknown apps",
         "docs/android_compatibility.md",
         "concise readiness view",
@@ -132,6 +134,8 @@ def test_troubleshooting_documents_phone_setup_and_mvp_failure_modes():
         "no fastboot",
         "--serial",
         "termux:widget manual placement",
+        "bootstrap-phone-stack.sh",
+        "pro-ai-server-bootstrap.log",
     ):
         assert expected in troubleshooting
 
@@ -314,6 +318,7 @@ def test_production_rc_doc_documents_hardware_packaged_exe_and_go_no_go():
         "scripts/smoke-production-installer.ps1 -withphone",
         "pro-ai-server android-compatibility",
         "pro-ai-server setup --execute --yes",
+        "bootstrap-phone-stack.sh",
         "pro-ai-server install-termux-apps",
         "pro-ai-server tunnel",
         "pro-ai-server test-prompt",

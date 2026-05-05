@@ -70,8 +70,10 @@ def test_delivery_plan_includes_inspectable_post_push_termux_steps():
     plan = build_script_delivery_plan()
 
     assert plan.post_push_termux_commands == (
+        "~/bootstrap-phone-stack.sh",
         "~/bootstrap.sh",
         "~/install-models.sh",
         "~/start-pro-ai-server.sh",
     )
+    assert any("one-command phone stack" in instruction for instruction in plan.instructions)
     assert any("Termux:Widget" in instruction for instruction in plan.instructions)
