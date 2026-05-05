@@ -6,7 +6,7 @@ from typing import Iterable
 
 from pro_ai_server.continue_config import ContinueConfigWriteResult
 from pro_ai_server.models import ModelPlan
-from pro_ai_server.ollama import OllamaTestPromptStatus
+from pro_ai_server.ollama import ModelInventoryStatus, OllamaServerStatus, OllamaTestPromptStatus
 from pro_ai_server.script_delivery import ScriptDeliveryPlan
 from pro_ai_server.setup_workflow import ProductionInstallerPlan, ProductionInstallerStep, SetupWorkflowPlan
 from pro_ai_server.termux_scripts import TermuxScriptBundle
@@ -20,9 +20,18 @@ class SetupReceiptItem:
 
 
 @dataclass(frozen=True)
+class SetupErrorState:
+    problem: str
+    likely_cause: str
+    recovery_action: str
+    debug_detail: str
+
+
+@dataclass(frozen=True)
 class SetupReceipt:
     mode: str | None = None
     model_profile: str | None = None
+    device_model: str | None = None
     generated_termux_paths: tuple[Path, ...] = ()
     continue_config_path: Path | None = None
     continue_backup_path: Path | None = None
@@ -35,8 +44,13 @@ class SetupReceipt:
     artifacts: tuple[SetupReceiptItem, ...] = ()
     next_steps: tuple[SetupReceiptItem, ...] = ()
     installer_steps: tuple[ProductionInstallerStep, ...] = ()
+    ollama_server_ok: bool | None = None
+    ollama_model_names: tuple[str, ...] = ()
+    missing_models: tuple[str, ...] = ()
     test_prompt_ok: bool | None = None
     test_prompt_response: str | None = None
+    test_prompt_warnings: tuple[str, ...] = ()
+    errors: tuple[SetupErrorState, ...] = ()
 
 
 def build_setup_receipt(
@@ -49,12 +63,16 @@ def build_setup_receipt(
     model_plan: ModelPlan | None = None,
     mode: str | None = None,
     selected_device_serial: str | None = None,
+    device_model: str | None = None,
     pushed_scripts: bool | None = None,
     tunnel_requested: bool | None = None,
     warnings: Iterable[str] = (),
     notes: Iterable[str] = (),
     production_plan: ProductionInstallerPlan | None = None,
+    ollama_status: OllamaServerStatus | None = None,
+    model_inventory_status: ModelInventoryStatus | None = None,
     test_prompt_status: OllamaTestPromptStatus | None = None,
+    errors: Iterable[SetupErrorState] = (),
 ) -> SetupReceipt:
     """Build a pure execution receipt from already-created plan/result objects."""
 
@@ -84,6 +102,7 @@ def build_setup_receipt(
     return SetupReceipt(
         mode=normalized_mode,
         model_profile=selected_model_plan.profile if selected_model_plan else None,
+        device_model=device_model,
         generated_termux_paths=generated_paths,
         continue_config_path=continue_result.config_path if continue_result else None,
         continue_backup_path=continue_result.backup_path if continue_result else None,
@@ -96,8 +115,13 @@ def build_setup_receipt(
         artifacts=artifacts,
         next_steps=next_steps,
         installer_steps=production_plan.steps if production_plan else (),
+        ollama_server_ok=_server_ok(ollama_status, model_inventory_status),
+        ollama_model_names=_model_names(ollama_status, model_inventory_status),
+        missing_models=model_inventory_status.missing_models if model_inventory_status else (),
         test_prompt_ok=test_prompt_status.ok if test_prompt_status else None,
         test_prompt_response=test_prompt_status.response if test_prompt_status else None,
+        test_prompt_warnings=test_prompt_status.warnings if test_prompt_status else (),
+        errors=tuple(errors),
     )
 
 
@@ -110,6 +134,7 @@ def render_setup_receipt(receipt: SetupReceipt) -> str:
         "Summary",
         f"- Mode: {_value(receipt.mode)}",
         f"- Model profile: {_value(receipt.model_profile)}",
+        f"- Device model: {_value(receipt.device_model)}",
         f"- Selected device serial: {_value(receipt.selected_device_serial)}",
         f"- Pushed scripts: {_yes_no(receipt.pushed_scripts)}",
         f"- Tunnel requested: {_yes_no(receipt.tunnel_requested)}",
@@ -123,14 +148,28 @@ def render_setup_receipt(receipt: SetupReceipt) -> str:
         lines.append("- none")
     lines.extend(["", "Next steps"])
     lines.extend(_render_items(receipt.next_steps))
+    if receipt.ollama_server_ok is not None:
+        lines.extend(["", "Ollama server"])
+        lines.append(f"- Result: {_pass_fail(receipt.ollama_server_ok)}")
+        if receipt.ollama_model_names:
+            lines.append(f"- Models: {', '.join(receipt.ollama_model_names)}")
+        else:
+            lines.append("- Models: none detected")
+        if receipt.missing_models:
+            lines.append(f"- Missing models: {', '.join(receipt.missing_models)}")
     if receipt.test_prompt_ok is not None:
         lines.extend(["", "Test prompt"])
         lines.append(f"- Result: {_pass_fail(receipt.test_prompt_ok)}")
         if receipt.test_prompt_response:
             lines.append(f"- Response: {receipt.test_prompt_response}")
+        for warning in receipt.test_prompt_warnings:
+            lines.append(f"- Warning: {warning}")
     if receipt.installer_steps:
         lines.extend(["", "Production installer steps"])
         lines.extend(_render_installer_steps(receipt.installer_steps))
+    if receipt.errors:
+        lines.extend(["", "Errors"])
+        lines.extend(_render_errors(receipt.errors))
     lines.extend(["", "Warnings"])
     lines.extend(f"- {warning}" for warning in receipt.warnings)
     if not receipt.warnings:
@@ -203,6 +242,20 @@ def _render_installer_steps(steps: tuple[ProductionInstallerStep, ...]) -> list[
     return rendered
 
 
+def _render_errors(errors: tuple[SetupErrorState, ...]) -> list[str]:
+    rendered: list[str] = []
+    for index, error in enumerate(errors, start=1):
+        rendered.extend(
+            [
+                f"- Error {index}: {error.problem}",
+                f"  Likely cause: {error.likely_cause}",
+                f"  Recovery: {error.recovery_action}",
+                f"  Debug: {error.debug_detail}",
+            ]
+        )
+    return rendered
+
+
 def _workflow_has_step(workflow_plan: SetupWorkflowPlan | None, key: str) -> bool:
     if workflow_plan is None:
         return False
@@ -232,3 +285,25 @@ def _yes_no(value: bool) -> str:
 
 def _pass_fail(value: bool) -> str:
     return "pass" if value else "fail"
+
+
+def _server_ok(
+    ollama_status: OllamaServerStatus | None,
+    model_inventory_status: ModelInventoryStatus | None,
+) -> bool | None:
+    if model_inventory_status is not None:
+        return model_inventory_status.ok
+    if ollama_status is not None:
+        return ollama_status.ok
+    return None
+
+
+def _model_names(
+    ollama_status: OllamaServerStatus | None,
+    model_inventory_status: ModelInventoryStatus | None,
+) -> tuple[str, ...]:
+    if model_inventory_status is not None:
+        return model_inventory_status.model_names
+    if ollama_status is not None:
+        return ollama_status.model_names
+    return ()

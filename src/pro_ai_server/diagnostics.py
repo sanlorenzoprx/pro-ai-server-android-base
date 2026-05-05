@@ -12,6 +12,7 @@ from pathlib import Path
 
 from pro_ai_server import __version__
 from pro_ai_server.hardware import parse_battery_dump, parse_data_free_storage_gb, parse_meminfo_ram_gb
+from pro_ai_server.setup_receipt import SetupReceipt, render_setup_receipt
 
 
 IDE_COMMANDS = ("code", "cursor", "codium", "windsurf")
@@ -126,6 +127,7 @@ def build_diagnostics_report(
     adb_path: str | None,
     command_runner: CommandRunner = default_command_runner,
     which: Which = shutil.which,
+    setup_receipt: SetupReceipt | None = None,
 ) -> DiagnosticsReport:
     ide_results = detect_ide_clis(which)
     host_lines = [
@@ -182,12 +184,13 @@ def build_diagnostics_report(
             or ["<no output>"]
         )
 
-    report = "\n\n".join(
-        [
-            "# Pro AI Server Diagnostics",
-            _section("Host", host_lines),
-            _section("Phone", phone_lines),
-            _section("Server", server_lines),
-        ]
-    )
+    sections = [
+        "# Pro AI Server Diagnostics",
+        _section("Host", host_lines),
+        _section("Phone", phone_lines),
+        _section("Server", server_lines),
+    ]
+    if setup_receipt is not None:
+        sections.append(_section("Setup Receipt", render_setup_receipt(setup_receipt).splitlines()))
+    report = "\n\n".join(sections)
     return DiagnosticsReport(text=redact_sensitive_paths(report))

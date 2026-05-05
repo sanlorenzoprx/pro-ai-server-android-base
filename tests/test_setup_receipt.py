@@ -2,9 +2,9 @@ from pathlib import Path
 
 from pro_ai_server.continue_config import ContinueConfigWriteResult
 from pro_ai_server.models import model_plan_for_profile
-from pro_ai_server.ollama import OllamaTestPromptStatus
+from pro_ai_server.ollama import ModelInventoryStatus, OllamaServerStatus, OllamaTestPromptStatus
 from pro_ai_server.script_delivery import build_script_delivery_plan
-from pro_ai_server.setup_receipt import SetupReceipt, build_setup_receipt, render_setup_receipt
+from pro_ai_server.setup_receipt import SetupErrorState, SetupReceipt, build_setup_receipt, render_setup_receipt
 from pro_ai_server.setup_workflow import mark_production_step_failed, plan_production_installer, plan_setup_workflow
 from pro_ai_server.termux_scripts import generate_termux_scripts
 
@@ -104,6 +104,7 @@ def test_render_setup_receipt_is_deterministic_text():
         "Summary\n"
         "- Mode: usb\n"
         "- Model profile: professional\n"
+        "- Device model: not recorded\n"
         "- Selected device serial: device-123\n"
         "- Pushed scripts: yes\n"
         "- Tunnel requested: yes\n"
@@ -132,6 +133,7 @@ def test_render_setup_receipt_handles_absent_optional_fields():
 
     assert "- Mode: not recorded" in rendered
     assert "- Model profile: not recorded" in rendered
+    assert "- Device model: not recorded" in rendered
     assert "- Selected device serial: not recorded" in rendered
     assert "Artifacts\n- none\n" in rendered
     assert "Warnings\n- none\n" in rendered
@@ -171,3 +173,58 @@ def test_receipt_can_include_test_prompt_result():
     assert receipt.test_prompt_ok is True
     assert receipt.test_prompt_response == "pro-ai-server-ready"
     assert "Test prompt\n- Result: pass\n- Response: pro-ai-server-ready\n" in rendered
+
+
+def test_receipt_includes_production_success_context():
+    receipt = build_setup_receipt(
+        workflow_plan=plan_setup_workflow(),
+        selected_device_serial="ABC123",
+        device_model="Pixel 6",
+        ollama_status=OllamaServerStatus(ok=True, model_names=("qwen2.5-coder:3b",)),
+        test_prompt_status=OllamaTestPromptStatus(
+            ok=True,
+            model="qwen2.5-coder:3b",
+            response="pro-ai-server-ready",
+        ),
+    )
+
+    rendered = render_setup_receipt(receipt)
+
+    assert "- Device model: Pixel 6" in rendered
+    assert "- Selected device serial: ABC123" in rendered
+    assert "Ollama server\n- Result: pass\n- Models: qwen2.5-coder:3b\n" in rendered
+    assert "Test prompt\n- Result: pass\n- Response: pro-ai-server-ready\n" in rendered
+
+
+def test_receipt_includes_partial_failure_context_and_error_state():
+    receipt = build_setup_receipt(
+        workflow_plan=plan_setup_workflow(),
+        model_inventory_status=ModelInventoryStatus(
+            ok=False,
+            model_names=("qwen2.5-coder:3b",),
+            missing_models=("qwen2.5-coder:1.5b-base",),
+        ),
+        test_prompt_status=OllamaTestPromptStatus(
+            ok=False,
+            model="qwen2.5-coder:3b",
+            warnings=("Ollama did not return a test-prompt response.",),
+        ),
+        errors=(
+            SetupErrorState(
+                problem="Test prompt failed.",
+                likely_cause="Ollama server is not running.",
+                recovery_action="Run ~/start-pro-ai-server.sh in Termux.",
+                debug_detail="curl returned connection refused",
+            ),
+        ),
+    )
+
+    rendered = render_setup_receipt(receipt)
+
+    assert "Ollama server\n- Result: fail\n- Models: qwen2.5-coder:3b\n" in rendered
+    assert "- Missing models: qwen2.5-coder:1.5b-base" in rendered
+    assert "- Warning: Ollama did not return a test-prompt response." in rendered
+    assert "Errors\n- Error 1: Test prompt failed." in rendered
+    assert "Likely cause: Ollama server is not running." in rendered
+    assert "Recovery: Run ~/start-pro-ai-server.sh in Termux." in rendered
+    assert "Debug: curl returned connection refused" in rendered

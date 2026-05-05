@@ -6,6 +6,8 @@ from pro_ai_server.diagnostics import (
     summarize_ram_diagnostic,
     write_diagnostics_report,
 )
+from pro_ai_server.setup_receipt import SetupErrorState, build_setup_receipt
+from pro_ai_server.setup_workflow import plan_setup_workflow
 
 
 def test_diagnostics_report_includes_host_phone_and_server_sections():
@@ -121,6 +123,36 @@ def test_write_diagnostics_report_writes_utf8_text(tmp_path):
 
     assert written_path == output_path
     assert output_path.read_text(encoding="utf-8") == report.text
+
+
+def test_diagnostics_report_can_include_redacted_setup_receipt_context(monkeypatch):
+    monkeypatch.setenv("USERPROFILE", "C:\\Users\\Hector")
+    receipt = build_setup_receipt(
+        workflow_plan=plan_setup_workflow(),
+        selected_device_serial="ABC123",
+        device_model="Pixel 6",
+        errors=(
+            SetupErrorState(
+                problem="Continue config write failed.",
+                likely_cause="The config file is locked.",
+                recovery_action="Close the IDE and rerun setup.",
+                debug_detail="C:\\Users\\Hector\\.continue\\config.yaml is locked",
+            ),
+        ),
+    )
+
+    report = build_diagnostics_report(
+        adb_path=None,
+        command_runner=lambda _: "curl unavailable",
+        which=lambda _: None,
+        setup_receipt=receipt,
+    ).text
+
+    assert "## Setup Receipt" in report
+    assert "Pixel 6" in report
+    assert "Continue config write failed." in report
+    assert "~\\.continue\\config.yaml is locked" in report
+    assert "C:\\Users\\Hector" not in report
 
 
 def test_redact_sensitive_paths():
