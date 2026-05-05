@@ -2,7 +2,11 @@ from pro_ai_server.android_compatibility import (
     ApkManifest,
     ApkManifestEntry,
     assess_android_compatibility,
+    load_apk_manifest,
+    manifest_install_options,
     parse_android_major,
+    render_android_validation_lanes,
+    render_apk_manifest,
 )
 from pro_ai_server.hardware import assess_device_profile
 
@@ -96,3 +100,32 @@ def test_apk_manifest_selects_entry_by_android_range():
 
     assert manifest.for_package("com.termux", 13) is not None
     assert manifest.for_package("com.termux", 6) is None
+
+
+def test_default_apk_manifest_is_complete_for_android_7_plus_production_lane():
+    manifest = load_apk_manifest()
+
+    for package_name in ("org.fdroid.fdroid", "com.termux", "com.termux.api"):
+        entry = manifest.for_package(package_name, 13)
+        assert entry is not None
+        assert entry.version != "TBD"
+        assert entry.url.startswith("https://f-droid.org/repo/")
+        assert len(entry.sha256) == 64
+        assert entry.sha256 != "TBD"
+
+    options = manifest_install_options(manifest, 13)
+    assert "--fdroid-url" in options
+    assert "--termux-url" in options
+    assert "--termux-api-url" in options
+    assert manifest_install_options(manifest, 6) == ()
+
+
+def test_render_apk_manifest_and_validation_lanes_include_android_bands():
+    manifest_lines = render_apk_manifest(load_apk_manifest(), 14)
+    lane_lines = render_android_validation_lanes()
+
+    assert any("Android major: 14" in line for line in manifest_lines)
+    assert any("Termux" in line for line in manifest_lines)
+    assert any("android-7-9-yellow" in line for line in lane_lines)
+    assert any("android-10-13-green" in line for line in lane_lines)
+    assert any("android-14-15-green" in line for line in lane_lines)

@@ -38,6 +38,7 @@ pro-ai-server android-compatibility --serial ZY22GKMWPN
 pro-ai-server setup --execute --yes
 pro-ai-server install-termux-apps --serial ZY22GKMWPN
 pro-ai-server setup --production --execute --yes --serial ZY22GKMWPN --termux-apk C:\path\to\termux.apk --termux-api-apk C:\path\to\termux-api.apk
+pro-ai-server setup --production --execute --yes --serial ZY22GKMWPN --use-pinned-apk-manifest
 pro-ai-server tunnel
 pro-ai-server test-prompt
 pro-ai-server status
@@ -61,6 +62,14 @@ Use status values `completed`, `blocked`, or `skipped`. Do not leave a check bla
 | Phone | Android | Serial Recorded | RAM Profile | Chat Model | Autocomplete Model | ADB Authorized | Setup Execute | Termux Ready | Scripts Pushed | Tunnel | Model Inventory | Test Prompt | Status | Result |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | motorola moto g 5G (2022) | 13 | ZY22GKMWPN | professional | qwen2.5-coder:3b | qwen2.5-coder:1.5b-base | completed | skipped | blocked | blocked | completed | blocked | blocked | blocked | Termux/Ollama not installed yet |
+
+Android lane validation matrix:
+
+| Lane | Android | Device Needed | Current Evidence | Status |
+|---|---:|---|---|---|
+| android-7-9-yellow | 7-9 | Yes | Manifest supports Android 7+; no live device recorded yet | blocked |
+| android-10-13-green | 10-13 | Partially | Moto g 5G Android 13 detected; RAM places it in yellow/lightweight model tier | partial |
+| android-14-15-green | 14-15 | Yes | Manifest supports Android 7+; stricter install/background behavior still needs device proof | blocked |
 
 Device identity record:
 
@@ -115,6 +124,7 @@ Recovery log:
 | Production setup could use raw scanner profile | Updated `setup --production` to use compatibility model tier unless `--profile` or `--ram-gb` is explicitly provided | Yellow devices default to lightweight production profile | No |
 | Termux missing | Added `install-termux-apps`; F-Droid is installed and the command opens Termux and Termux:API package pages or installs supplied APKs with `--yes` | Blocked until Termux and Termux:API are installed and opened once | Yes |
 | Setup did not drive phone-side stack | Added TKT-P22-003A so `setup --production --execute --yes` can install/open Termux apps, verify readiness, push scripts, request `bootstrap-phone-stack.sh`, and verify endpoint/test prompt | Source implementation complete; live phone remains blocked until Termux/Termux:API install is approved or supplied via trusted APKs | Yes |
+| APK manifest values were placeholders | Added reviewed Android 7+ F-Droid APK manifest and `--use-pinned-apk-manifest` setup path | Source implementation complete; live cross-lane devices still needed for Android 7-9 and 14-15 | No |
 | Ollama unavailable | Ran `status`, `server-check`, and `test-prompt` after USB tunnel | Blocked until phone-side Ollama server is installed and running | Yes |
 
 ## Hardware Smoke Attempts

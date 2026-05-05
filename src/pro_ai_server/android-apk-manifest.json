@@ -1,0 +1,43 @@
+{
+  "generated_at": "2026-05-05",
+  "source": "F-Droid package API and F-Droid verification reports",
+  "policy": "Stable, signed F-Droid APKs only. Do not pin beta releases for production lanes.",
+  "entries": [
+    {
+      "package_name": "org.fdroid.fdroid",
+      "label": "F-Droid Client",
+      "version": "1.23.1",
+      "version_code": 1023051,
+      "min_android": 7,
+      "max_android": null,
+      "url": "https://f-droid.org/repo/org.fdroid.fdroid_1023051.apk",
+      "sha256": "1dfce4269081693f10350dbabd26991a59d7c2bb81f870de54e5b113f4785b7a",
+      "source": "fdroid",
+      "notes": "Pinned to the latest stable F-Droid client with a published verification report during review. F-Droid API suggested 1.23.2, but this manifest waits for reviewed checksum evidence before moving."
+    },
+    {
+      "package_name": "com.termux",
+      "label": "Termux",
+      "version": "0.118.3",
+      "version_code": 1002,
+      "min_android": 7,
+      "max_android": null,
+      "url": "https://f-droid.org/repo/com.termux_1002.apk",
+      "sha256": "e6265a57eb5ca363808488e3b01955958bed93bc0c8a0d281849b363b11027ec",
+      "source": "fdroid",
+      "notes": "Stable suggested Termux release for Android 7.0+; beta 0.119.x releases are intentionally excluded from production."
+    },
+    {
+      "package_name": "com.termux.api",
+      "label": "Termux:API",
+      "version": "0.53.0",
+      "version_code": 1002,
+      "min_android": 7,
+      "max_android": null,
+      "url": "https://f-droid.org/repo/com.termux.api_1002.apk",
+      "sha256": "4497dbbf81906df52e59ed387a5223d225aa0de3aca817cc557a621e4dadda44",
+      "source": "fdroid",
+      "notes": "Must stay in the same F-Droid trust lane as Termux."
+    }
+  ]
+}

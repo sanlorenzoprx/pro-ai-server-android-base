@@ -67,7 +67,15 @@ from pro_ai_server.agent.ticketizer import (
     select_accepted_recommendations,
     write_ticket_drafts,
 )
-from pro_ai_server.android_compatibility import assess_android_compatibility, render_android_compatibility
+from pro_ai_server.android_compatibility import (
+    ApkManifest,
+    assess_android_compatibility,
+    load_apk_manifest,
+    parse_android_major,
+    render_android_compatibility,
+    render_android_validation_lanes,
+    render_apk_manifest,
+)
 from pro_ai_server.android_compatibility import AndroidCompatibilityResult
 from pro_ai_server.continue_config import (
     api_base_for_mode,
@@ -461,6 +469,36 @@ def _production_profile_from_compatibility(result: AndroidCompatibilityResult) -
     if result.model_tier in {"lightweight", "professional", "max"}:
         return result.model_tier
     return None
+
+
+@app.command("apk-manifest")
+def apk_manifest(
+    android_version: str | None = typer.Option(
+        None,
+        "--android-version",
+        help="Optional Android version used to select manifest entries and setup flags.",
+    ),
+    manifest_path: Path | None = typer.Option(None, "--manifest", help="Optional APK manifest JSON path."),
+) -> None:
+    """Show pinned APK manifest values for the production install lane."""
+    try:
+        manifest = load_apk_manifest(manifest_path)
+        android_major = parse_android_major(android_version) if android_version else None
+        if android_version is not None and android_major is None:
+            raise ValueError(f"Unable to parse Android version: {android_version}")
+    except (OSError, ValueError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    for line in render_apk_manifest(manifest, android_major):
+        console.print(line)
+
+
+@app.command("android-validation-matrix")
+def android_validation_matrix() -> None:
+    """Show production hardware validation lanes for Android version bands."""
+    for line in render_android_validation_lanes():
+        console.print(line)
 
 
 @app.command()
@@ -877,6 +915,44 @@ def _resolve_setup_apks(
             sha256=termux_api_sha256,
             cache_dir=apk_cache_dir,
         ),
+    )
+
+
+def _manifest_inputs_for_setup(
+    *,
+    manifest: ApkManifest,
+    android_version: str,
+    fdroid_url: str | None,
+    fdroid_sha256: str | None,
+    termux_url: str | None,
+    termux_sha256: str | None,
+    termux_api_url: str | None,
+    termux_api_sha256: str | None,
+) -> tuple[str | None, str | None, str | None, str | None, str | None, str | None]:
+    android_major = parse_android_major(android_version)
+    if android_major is None:
+        raise ValueError(f"Unable to parse Android version for APK manifest selection: {android_version}")
+
+    for package_name in ("org.fdroid.fdroid", "com.termux", "com.termux.api"):
+        if manifest.for_package(package_name, android_major) is None:
+            raise ValueError(
+                f"No pinned APK manifest entry for {package_name} on Android {android_major}. "
+                "This device is not in the production APK install lane."
+            )
+
+    fdroid = manifest.for_package("org.fdroid.fdroid", android_major)
+    termux = manifest.for_package("com.termux", android_major)
+    termux_api = manifest.for_package("com.termux.api", android_major)
+    assert fdroid is not None
+    assert termux is not None
+    assert termux_api is not None
+    return (
+        fdroid_url or fdroid.url,
+        fdroid_sha256 or fdroid.sha256,
+        termux_url or termux.url,
+        termux_sha256 or termux.sha256,
+        termux_api_url or termux_api.url,
+        termux_api_sha256 or termux_api.sha256,
     )
 
 
@@ -1794,6 +1870,16 @@ def setup(
         "--apk-cache-dir",
         help="Directory for downloaded APK files.",
     ),
+    use_pinned_apk_manifest: bool = typer.Option(
+        False,
+        "--use-pinned-apk-manifest",
+        help="Use the bundled reviewed APK manifest for missing F-Droid, Termux, and Termux:API URL/SHA-256 inputs.",
+    ),
+    apk_manifest_path: Path | None = typer.Option(
+        None,
+        "--apk-manifest",
+        help="Optional APK manifest JSON path used with --use-pinned-apk-manifest.",
+    ),
 ) -> None:
     """Plan or execute the guided MVP setup workflow."""
     try:
@@ -1902,18 +1988,19 @@ def setup(
                 termux_apk=termux_apk,
                 termux_api_apk=termux_api_apk,
             )
-            resolved_fdroid_apk, resolved_termux_apk, resolved_termux_api_apk = _resolve_setup_apks(
-                fdroid_apk=fdroid_apk,
-                fdroid_url=fdroid_url,
-                fdroid_sha256=fdroid_sha256,
-                termux_apk=termux_apk,
-                termux_url=termux_url,
-                termux_sha256=termux_sha256,
-                termux_api_apk=termux_api_apk,
-                termux_api_url=termux_api_url,
-                termux_api_sha256=termux_api_sha256,
-                apk_cache_dir=apk_cache_dir,
-            )
+            if not use_pinned_apk_manifest:
+                resolved_fdroid_apk, resolved_termux_apk, resolved_termux_api_apk = _resolve_setup_apks(
+                    fdroid_apk=fdroid_apk,
+                    fdroid_url=fdroid_url,
+                    fdroid_sha256=fdroid_sha256,
+                    termux_apk=termux_apk,
+                    termux_url=termux_url,
+                    termux_sha256=termux_sha256,
+                    termux_api_apk=termux_api_apk,
+                    termux_api_url=termux_api_url,
+                    termux_api_sha256=termux_api_sha256,
+                    apk_cache_dir=apk_cache_dir,
+                )
 
         if effective_push or (create_usb_tunnel is not False and plan.mode == "usb"):
             adb = resolve_adb()
@@ -1923,6 +2010,41 @@ def setup(
             selected_serial = select_device_serial(adb, serial)
 
             if production and auto_install_termux:
+                if use_pinned_apk_manifest:
+                    manifest = load_apk_manifest(apk_manifest_path)
+                    android_version = run_command(
+                        adb_command(adb, ["shell", "getprop", "ro.build.version.release"], selected_serial)
+                    )
+                    (
+                        fdroid_url,
+                        fdroid_sha256,
+                        termux_url,
+                        termux_sha256,
+                        termux_api_url,
+                        termux_api_sha256,
+                    ) = _manifest_inputs_for_setup(
+                        manifest=manifest,
+                        android_version=android_version,
+                        fdroid_url=fdroid_url,
+                        fdroid_sha256=fdroid_sha256,
+                        termux_url=termux_url,
+                        termux_sha256=termux_sha256,
+                        termux_api_url=termux_api_url,
+                        termux_api_sha256=termux_api_sha256,
+                    )
+                    console.print(f"[green]Using pinned APK manifest for Android {android_version.strip()}.[/green]")
+                    resolved_fdroid_apk, resolved_termux_apk, resolved_termux_api_apk = _resolve_setup_apks(
+                        fdroid_apk=fdroid_apk,
+                        fdroid_url=fdroid_url,
+                        fdroid_sha256=fdroid_sha256,
+                        termux_apk=termux_apk,
+                        termux_url=termux_url,
+                        termux_sha256=termux_sha256,
+                        termux_api_apk=termux_api_apk,
+                        termux_api_url=termux_api_url,
+                        termux_api_sha256=termux_api_sha256,
+                        apk_cache_dir=apk_cache_dir,
+                    )
                 _install_termux_apps_for_setup(
                     adb=adb,
                     serial=selected_serial,

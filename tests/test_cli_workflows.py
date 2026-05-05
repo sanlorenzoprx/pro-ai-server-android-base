@@ -4,6 +4,7 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from pro_ai_server import cli
+from pro_ai_server.android_compatibility import ApkManifest, ApkManifestEntry
 from pro_ai_server.continue_config import ContinueConfigWriteResult
 from pro_ai_server.diagnostics import DiagnosticsReport
 from pro_ai_server.gateway.ollama_client import OllamaProxyResult
@@ -156,6 +157,29 @@ def test_setup_execute_refuses_continue_config_without_yes():
     assert "Refusing to execute without --yes" in result.output
 
 
+def test_apk_manifest_command_prints_pinned_setup_options():
+    runner = CliRunner()
+
+    result = runner.invoke(cli.app, ["apk-manifest", "--android-version", "13"])
+
+    assert result.exit_code == 0
+    assert "Pinned APK manifest" in result.output
+    assert "--termux-url" in result.output
+    assert "com.termux_1002.apk" in result.output
+    assert "TBD" not in result.output
+
+
+def test_android_validation_matrix_prints_required_android_lanes():
+    runner = CliRunner()
+
+    result = runner.invoke(cli.app, ["android-validation-matrix"])
+
+    assert result.exit_code == 0
+    assert "android-7-9-yellow" in result.output
+    assert "android-10-13-green" in result.output
+    assert "android-14-15-green" in result.output
+
+
 def test_setup_production_execute_installs_pushes_requests_phone_stack_and_verifies_endpoint(monkeypatch, tmp_path):
     runner = CliRunner()
     termux_apk = tmp_path / "termux.apk"
@@ -234,6 +258,119 @@ def test_setup_production_execute_installs_pushes_requests_phone_stack_and_verif
     assert "Requested" in result.output
     assert "Production endpoint verified" in result.output
     assert "Test prompt" in result.output
+
+
+def test_setup_production_execute_can_use_pinned_apk_manifest(monkeypatch, tmp_path):
+    runner = CliRunner()
+    apk_bytes = b"apk"
+    apk_hash = hashlib.sha256(apk_bytes).hexdigest()
+    commands = []
+    installed_packages = {"org.fdroid.fdroid"}
+
+    manifest = ApkManifest(
+        entries=(
+            ApkManifestEntry(
+                package_name="org.fdroid.fdroid",
+                label="F-Droid",
+                version="1",
+                min_android=7,
+                max_android=None,
+                url="https://downloads.example/fdroid.apk",
+                sha256=apk_hash,
+                source="fdroid",
+            ),
+            ApkManifestEntry(
+                package_name="com.termux",
+                label="Termux",
+                version="1",
+                min_android=7,
+                max_android=None,
+                url="https://downloads.example/termux.apk",
+                sha256=apk_hash,
+                source="fdroid",
+            ),
+            ApkManifestEntry(
+                package_name="com.termux.api",
+                label="Termux:API",
+                version="1",
+                min_android=7,
+                max_android=None,
+                url="https://downloads.example/termux-api.apk",
+                sha256=apk_hash,
+                source="fdroid",
+            ),
+        )
+    )
+
+    def fake_urlretrieve(url, target):
+        Path(target).write_bytes(apk_bytes)
+        return target, None
+
+    def fake_run(command, capture_output, text):
+        import subprocess
+
+        commands.append(command)
+        if command == ["adb", "devices"]:
+            return subprocess.CompletedProcess(command, 0, stdout="List of devices attached\nABC123\tdevice\n", stderr="")
+        if command == ["adb", "-s", "ABC123", "shell", "getprop", "ro.build.version.release"]:
+            return subprocess.CompletedProcess(command, 0, stdout="13\n", stderr="")
+        if command[:5] == ["adb", "-s", "ABC123", "shell", "pm"]:
+            package_name = command[-1]
+            if package_name in installed_packages:
+                return subprocess.CompletedProcess(command, 0, stdout=f"package:/data/app/{package_name}/base.apk", stderr="")
+            return subprocess.CompletedProcess(command, 1, stdout="", stderr="package not found")
+        if command[:4] == ["adb", "-s", "ABC123", "install"]:
+            if "termux-api.apk" in command[-1]:
+                installed_packages.add("com.termux.api")
+            elif "termux.apk" in command[-1]:
+                installed_packages.add("com.termux")
+            elif "fdroid.apk" in command[-1]:
+                installed_packages.add("org.fdroid.fdroid")
+            return subprocess.CompletedProcess(command, 0, stdout="Success", stderr="")
+        if command[:6] == ["adb", "-s", "ABC123", "shell", "test", "-d"]:
+            return subprocess.CompletedProcess(command, 0, stdout="yes", stderr="")
+        if command == ["adb", "-s", "ABC123", "shell", "dumpsys", "package", "com.termux"]:
+            return subprocess.CompletedProcess(command, 0, stdout="versionName=0.118.3", stderr="")
+        if command == ["curl", "--silent", "--show-error", "http://localhost:11434/api/tags"]:
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout='{"models":[{"name":"qwen2.5-coder:1.5b"},{"name":"qwen2.5-coder:0.5b"}]}',
+                stderr="",
+            )
+        if command[:7] == ["curl", "--silent", "--show-error", "-X", "POST", "-H", "Content-Type: application/json"]:
+            return subprocess.CompletedProcess(command, 0, stdout='{"response":"pro-ai-server-ready"}', stderr="")
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(cli, "resolve_adb", lambda: "adb")
+    monkeypatch.setattr(cli, "load_apk_manifest", lambda _: manifest)
+    monkeypatch.setattr(cli, "urlretrieve", fake_urlretrieve)
+    monkeypatch.setattr(cli.subprocess, "run", fake_run)
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "setup",
+            "--production",
+            "--execute",
+            "--yes",
+            "--profile",
+            "lightweight",
+            "--no-continue",
+            "--no-tunnel",
+            "--use-pinned-apk-manifest",
+            "--apk-cache-dir",
+            str(tmp_path),
+            "--output-dir",
+            str(tmp_path / "out"),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Using pinned APK manifest for Android 13" in result.output
+    assert ["adb", "-s", "ABC123", "install", "-r", str(tmp_path / "termux.apk")] in commands
+    assert ["adb", "-s", "ABC123", "install", "-r", str(tmp_path / "termux-api.apk")] in commands
+    assert "Production endpoint verified" in result.output
 
 
 def test_setup_production_execute_pauses_before_push_when_termux_is_not_ready(monkeypatch, tmp_path):

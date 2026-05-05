@@ -80,6 +80,14 @@ pro-ai-server setup --production --execute --yes --serial <device-serial> --fdro
 
 If setup pauses before script push, approve any Android install prompts, open Termux once, and rerun the same setup command. This is a recoverable Android stop, not a silent success.
 
+To use the bundled reviewed APK manifest instead of supplying URL/SHA-256 flags manually:
+
+```powershell
+pro-ai-server setup --production --execute --yes --serial <device-serial> --use-pinned-apk-manifest
+```
+
+If this fails on Android below 7, the phone is outside the production APK lane. If it fails on Android 14/15, record the install prompt or background restriction in `docs/PRODUCTION_RC.md` before changing the promise.
+
 Termux:Widget manual placement is still required. Install Termux:Widget, confirm the generated `Start Pro AI Server` shortcut is in `~/.shortcuts`, then add the widget or shortcut from the Android home screen.
 
 ### Production installer stops at Termux readiness

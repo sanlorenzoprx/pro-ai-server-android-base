@@ -62,6 +62,13 @@ pro-ai-server android-compatibility --serial <device-serial>
 
 See `docs/ANDROID_COMPATIBILITY.md` for green/yellow/red tiers, APK manifest rules, and Termux trust lane guidance.
 
+Show the Android validation lanes and pinned APK manifest:
+
+```powershell
+pro-ai-server android-validation-matrix
+pro-ai-server apk-manifest --android-version 13
+```
+
 ## 5. Check Termux Readiness
 
 ```powershell
@@ -113,6 +120,12 @@ pro-ai-server setup --production --execute --yes --serial <device-serial> --fdro
 ```
 
 Pinned downloads are also accepted on `setup --production --execute --yes` with `--fdroid-url`, `--fdroid-sha256`, `--termux-url`, `--termux-sha256`, `--termux-api-url`, and `--termux-api-sha256`. Setup pauses before script push if Android still requires install approval or Termux home initialization.
+
+To use the bundled reviewed manifest instead of supplying the URL and checksum flags manually:
+
+```powershell
+pro-ai-server setup --production --execute --yes --serial <device-serial> --use-pinned-apk-manifest
+```
 
 ## 6. Generate Termux Scripts
 

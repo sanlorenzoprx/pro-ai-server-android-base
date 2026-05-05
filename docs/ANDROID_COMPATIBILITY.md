@@ -22,6 +22,18 @@ The command reports Android compatibility tier, supported status, model tier, Te
 
 `setup --production` uses this compatibility model tier by default when no explicit `--profile` or `--ram-gb` override is provided. A yellow device therefore uses the lightweight production profile even when the raw hardware scan can recommend a more aggressive RAM-based profile.
 
+Show the validation matrix:
+
+```powershell
+pro-ai-server android-validation-matrix
+```
+
+Show the pinned APK manifest and setup flags for a specific Android version:
+
+```powershell
+pro-ai-server apk-manifest --android-version 13
+```
+
 ## Trust Lane Rules
 
 - F-Droid, Termux, and Termux:API should come from the same trusted lane.
@@ -31,43 +43,47 @@ The command reports Android compatibility tier, supported status, model tier, Te
 - Local APK installs require `--yes`.
 - Downloaded APKs require URL plus SHA-256 and are deleted on checksum mismatch.
 
-## APK Manifest Template
+## Pinned APK Manifest
 
-Use this schema when pinning exact APK releases:
+The production APK lane is pinned in `src/pro_ai_server/android-apk-manifest.json`. These values are not "latest"; they are reviewed stable artifacts for the Android 7+ F-Droid trust lane.
+The APK manifest template fields are `package_name`, `label`, `version`, `version_code`, `min_android`, `max_android`, `url`, `sha256`, `source`, and `notes`.
 
 ```json
 {
   "entries": [
     {
       "package_name": "org.fdroid.fdroid",
-      "label": "F-Droid",
-      "version": "TBD",
+      "label": "F-Droid Client",
+      "version": "1.23.1",
+      "version_code": 1023051,
       "min_android": 7,
       "max_android": null,
-      "url": "TBD",
-      "sha256": "TBD",
+      "url": "https://f-droid.org/repo/org.fdroid.fdroid_1023051.apk",
+      "sha256": "1dfce4269081693f10350dbabd26991a59d7c2bb81f870de54e5b113f4785b7a",
       "source": "fdroid",
-      "notes": "Pinned after release review."
+      "notes": "Pinned to a stable F-Droid client with a published verification report."
     },
     {
       "package_name": "com.termux",
       "label": "Termux",
-      "version": "TBD",
+      "version": "0.118.3",
+      "version_code": 1002,
       "min_android": 7,
       "max_android": null,
-      "url": "TBD",
-      "sha256": "TBD",
+      "url": "https://f-droid.org/repo/com.termux_1002.apk",
+      "sha256": "e6265a57eb5ca363808488e3b01955958bed93bc0c8a0d281849b363b11027ec",
       "source": "fdroid",
-      "notes": "Current Termux production lane starts at Android 7.0."
+      "notes": "Stable suggested Termux release for Android 7.0+."
     },
     {
       "package_name": "com.termux.api",
       "label": "Termux:API",
-      "version": "TBD",
+      "version": "0.53.0",
+      "version_code": 1002,
       "min_android": 7,
       "max_android": null,
-      "url": "TBD",
-      "sha256": "TBD",
+      "url": "https://f-droid.org/repo/com.termux.api_1002.apk",
+      "sha256": "4497dbbf81906df52e59ed387a5223d225aa0de3aca817cc557a621e4dadda44",
       "source": "fdroid",
       "notes": "Must match the Termux trust lane."
     }
@@ -75,7 +91,28 @@ Use this schema when pinning exact APK releases:
 }
 ```
 
-Do not replace `TBD` with live values until the exact releases and checksums have been reviewed.
+Use the manifest directly during production execute:
+
+```powershell
+pro-ai-server setup --production --execute --yes --serial <device-serial> --use-pinned-apk-manifest
+```
+
+Manifest provenance:
+
+- Termux F-Droid page lists current Termux releases and states the stable suggested `0.118.3` build requires Android 7.0 or newer.
+- F-Droid package API reported `com.termux` suggested version code `1002` and `com.termux.api` suggested version code `1002` during review.
+- F-Droid verification reports recorded the signed APK SHA-256 values pinned above.
+- F-Droid API reported F-Droid client `1.23.2` as suggested during review, but this manifest pins `1.23.1` until the newer client has reviewed checksum evidence in our manifest.
+
+## Android Validation Lanes
+
+| Lane | Android | ABI | RAM | Model Tier | Status | Product Promise |
+|---|---:|---|---:|---|---|---|
+| android-7-9-yellow | 7-9 | arm64-v8a | 4-6 GB | lightweight | device-needed | Lightweight local assistant with latency caveats |
+| android-10-13-green | 10-13 | arm64-v8a | 6 GB+ | professional | partially-live-validated | DevStack coding assistant with 1.5B/3B models |
+| android-14-15-green | 14-15 | arm64-v8a | 6 GB+ | professional | device-needed | DevStack coding assistant after stricter install behavior is validated |
+
+The Moto g 5G (2022) live device is Android 13 and belongs to the Android 10-13 lane, but its 5.54 GB RAM keeps it in the yellow/lightweight model tier.
 
 ## Model Guidance
 

@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
+from importlib import resources
+from pathlib import Path
+from typing import Any
 
 from pro_ai_server.hardware import DeviceProfile
 
@@ -31,6 +35,7 @@ class ApkManifestEntry:
     sha256: str
     source: str
     notes: str = ""
+    version_code: int | None = None
 
 
 @dataclass(frozen=True)
@@ -47,6 +52,134 @@ class ApkManifest:
                 continue
             return entry
         return None
+
+    def entries_for_android(self, android_major: int) -> tuple[ApkManifestEntry, ...]:
+        return tuple(
+            entry
+            for entry in self.entries
+            if android_major >= entry.min_android
+            and (entry.max_android is None or android_major <= entry.max_android)
+        )
+
+
+@dataclass(frozen=True)
+class AndroidValidationLane:
+    key: str
+    android_range: str
+    min_android: int
+    max_android: int | None
+    abi: str
+    ram_gb: str
+    model_tier: str
+    product_promise: str
+    validation_status: str
+    notes: str = ""
+
+
+ANDROID_VALIDATION_LANES: tuple[AndroidValidationLane, ...] = (
+    AndroidValidationLane(
+        key="android-7-9-yellow",
+        android_range="7-9",
+        min_android=7,
+        max_android=9,
+        abi="arm64-v8a",
+        ram_gb="4-6",
+        model_tier="lightweight",
+        product_promise="Lightweight local assistant with latency caveats.",
+        validation_status="device-needed",
+        notes="Use current Termux stable lane; no Android 5/6 archive promise.",
+    ),
+    AndroidValidationLane(
+        key="android-10-13-green",
+        android_range="10-13",
+        min_android=10,
+        max_android=13,
+        abi="arm64-v8a",
+        ram_gb="6+",
+        model_tier="professional",
+        product_promise="DevStack coding assistant with 1.5B/3B models.",
+        validation_status="partially-live-validated",
+        notes="Moto g 5G Android 13 is live yellow/lightweight because RAM is under 6 GB.",
+    ),
+    AndroidValidationLane(
+        key="android-14-15-green",
+        android_range="14-15",
+        min_android=14,
+        max_android=15,
+        abi="arm64-v8a",
+        ram_gb="6+",
+        model_tier="professional",
+        product_promise="DevStack coding assistant after stricter install behavior is validated.",
+        validation_status="device-needed",
+        notes="Validate unknown-app install prompts and background behavior on Android 14/15.",
+    ),
+)
+
+
+def load_apk_manifest(path: Path | None = None) -> ApkManifest:
+    if path is None:
+        text = resources.files("pro_ai_server").joinpath("android-apk-manifest.json").read_text(encoding="utf-8")
+    else:
+        text = path.read_text(encoding="utf-8")
+    payload = json.loads(text)
+    entries = tuple(_manifest_entry_from_mapping(entry) for entry in payload.get("entries", ()))
+    return ApkManifest(entries=entries)
+
+
+def manifest_install_options(manifest: ApkManifest, android_major: int) -> tuple[str, ...]:
+    options: list[str] = []
+    for package_name, url_flag, sha_flag in (
+        ("org.fdroid.fdroid", "--fdroid-url", "--fdroid-sha256"),
+        ("com.termux", "--termux-url", "--termux-sha256"),
+        ("com.termux.api", "--termux-api-url", "--termux-api-sha256"),
+    ):
+        entry = manifest.for_package(package_name, android_major)
+        if entry is None:
+            continue
+        options.extend((url_flag, entry.url, sha_flag, entry.sha256))
+    return tuple(options)
+
+
+def render_apk_manifest(manifest: ApkManifest, android_major: int | None = None) -> tuple[str, ...]:
+    entries = manifest.entries if android_major is None else manifest.entries_for_android(android_major)
+    lines = ["Pinned APK manifest"]
+    if android_major is not None:
+        lines.append(f"Android major: {android_major}")
+    for entry in entries:
+        version = entry.version if entry.version_code is None else f"{entry.version} ({entry.version_code})"
+        lines.extend(
+            (
+                f"- {entry.label}: {version}",
+                f"  Package: {entry.package_name}",
+                f"  Android: {entry.min_android}+"
+                if entry.max_android is None
+                else f"  Android: {entry.min_android}-{entry.max_android}",
+                f"  URL: {entry.url}",
+                f"  SHA-256: {entry.sha256}",
+                f"  Source: {entry.source}",
+            )
+        )
+        if entry.notes:
+            lines.append(f"  Notes: {entry.notes}")
+    if android_major is not None:
+        options = manifest_install_options(manifest, android_major)
+        if options:
+            lines.append("Setup options:")
+            lines.append(" ".join(options))
+    return tuple(lines)
+
+
+def render_android_validation_lanes() -> tuple[str, ...]:
+    lines = ["Android validation lanes"]
+    for lane in ANDROID_VALIDATION_LANES:
+        lines.append(
+            f"- {lane.key}: Android {lane.android_range}, {lane.abi}, {lane.ram_gb} GB RAM, "
+            f"{lane.model_tier}, {lane.validation_status}"
+        )
+        lines.append(f"  Promise: {lane.product_promise}")
+        if lane.notes:
+            lines.append(f"  Notes: {lane.notes}")
+    return tuple(lines)
 
 
 def assess_android_compatibility(
@@ -125,6 +258,21 @@ def render_android_compatibility(result: AndroidCompatibilityResult) -> tuple[st
     lines.extend(f"Warning: {warning}" for warning in result.warnings)
     lines.extend(f"Blocker: {blocker}" for blocker in result.blockers)
     return tuple(lines)
+
+
+def _manifest_entry_from_mapping(entry: dict[str, Any]) -> ApkManifestEntry:
+    return ApkManifestEntry(
+        package_name=str(entry["package_name"]),
+        label=str(entry["label"]),
+        version=str(entry["version"]),
+        version_code=entry.get("version_code"),
+        min_android=int(entry["min_android"]),
+        max_android=None if entry.get("max_android") is None else int(entry["max_android"]),
+        url=str(entry["url"]),
+        sha256=str(entry["sha256"]),
+        source=str(entry["source"]),
+        notes=str(entry.get("notes", "")),
+    )
 
 
 def _append_installer_conflicts(
