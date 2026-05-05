@@ -199,6 +199,41 @@ def test_devstack_offer_documents_launch_packages_and_boundaries():
         assert expected in offer
 
 
+def test_devstack_capture_checklist_documents_video_and_sales_beats():
+    demo = read_doc("docs/DEVSTACK_DEMO.md")
+    offer = read_doc("docs/DEVSTACK_OFFER.md")
+
+    for expected in (
+        "capture checklist",
+        "screen recording",
+        "phone shot",
+        "ide shot",
+        "status check",
+        "chat moment",
+        "autocomplete or code assistance",
+        "short-form video beats",
+        "sales-call demo beats",
+        "cta",
+        "trial entry, starter install, or pro install",
+        "if this response takes a moment",
+        "cut from the prompt to the completed response",
+        "local-first over usb",
+    ):
+        assert expected in demo
+
+    for expected in (
+        "proof asset alignment",
+        "phone shot",
+        "status shot",
+        "ide shot",
+        "chat proof",
+        "code assistance proof",
+        "trial entry, starter install, or pro install",
+        "hardware qualifier",
+    ):
+        assert expected in offer
+
+
 def test_production_smoke_script_documents_no_phone_and_phone_paths():
     smoke = read_doc("scripts/smoke-production-installer.ps1")
 

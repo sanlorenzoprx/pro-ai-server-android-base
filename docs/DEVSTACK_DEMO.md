@@ -69,6 +69,29 @@ Expected API base:
 http://localhost:11434
 ```
 
+## Capture Checklist
+
+Use this list when recording proof assets for the launch page, creator clips, or affiliate demos:
+
+- Screen recording is set to capture the IDE, terminal, and mouse pointer.
+- Microphone is checked and background noise is low.
+- Browser tabs, secrets, private repos, and customer data are closed.
+- Terminal font is large enough to read on mobile.
+- Phone shot clearly shows the Android phone connected by USB.
+- IDE shot clearly shows VS Code or Cursor with Continue open.
+- Status check is captured with `pro-ai-server status`.
+- USB endpoint proof is captured with `pro-ai-server configure-devstack`.
+- Chat moment shows Continue answering a local coding question.
+- Autocomplete or code assistance moment shows a small useful edit.
+- Offer message is spoken once without overpromising speed.
+- CTA names the trial entry, starter install, or pro install path.
+
+Required proof shots:
+
+- Phone running AI: show the connected Android phone and the terminal status check.
+- IDE responding: show Continue chat in VS Code or Cursor using the local endpoint.
+- Offer clarity: say "private AI coding assistant", "local-first over USB", and "no monthly AI model bill for supported local workflows."
+
 ## Live Demo Run
 
 1. Show the phone connected by USB.
@@ -127,6 +150,8 @@ Use these when the phone is low-RAM or the model is slow:
 - "The installer selected a smaller model because this hardware has limited memory."
 - "First-token latency can be slower on older phones; the important part is that the coding assistant is running locally over USB."
 - "For larger code tasks, the Pro install tier should use a higher-RAM phone or a larger supported model."
+- "If this response takes a moment, that is the tradeoff of running the model locally on older phone hardware."
+- "For short-form video, we can cut from the prompt to the completed response while still showing that the endpoint is local."
 
 If Continue is not ready:
 
@@ -140,6 +165,34 @@ If the model does not respond:
 - Run `pro-ai-server tunnel`.
 - Run `pro-ai-server status`.
 - Fall back to showing the terminal test prompt before returning to the IDE.
+
+## Short-Form Video Beats
+
+Use this for a 30-60 second clip:
+
+1. Hook: "This old Android phone is now a private AI coding assistant."
+2. Proof: show the phone connected by USB.
+3. Status: show `pro-ai-server status`.
+4. IDE: show Cursor or VS Code with Continue open.
+5. Chat: ask Continue to explain or improve a small function.
+6. Code assistance: show one autocomplete or applied edit.
+7. Offer: "Local-first over USB, with no monthly AI model bill for supported local workflows."
+8. CTA: "Start with the trial entry, then upgrade to starter or pro install if you want help setting it up."
+
+## Sales-Call Demo Beats
+
+Use this for a 5-10 minute live call:
+
+1. Confirm the customer's phone, Windows laptop, and preferred launch IDE.
+2. Explain the scope: USB-first, local model, Continue in VS Code or Cursor.
+3. Show the connected phone and run `pro-ai-server status`.
+4. Run `pro-ai-server devstack-ide-status`.
+5. Run `pro-ai-server configure-devstack`.
+6. Show Continue chat answering a small code question.
+7. Show autocomplete or code assistance with a small edit.
+8. Explain realistic performance limits for low-RAM devices.
+9. Map the customer to trial entry, starter install, or pro install.
+10. Close with the next setup step and support boundary.
 
 ## Close
 

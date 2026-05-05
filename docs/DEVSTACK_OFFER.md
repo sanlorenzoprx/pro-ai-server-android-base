@@ -99,3 +99,16 @@ Use this line for launch pages, demos, and creator scripts:
 Use this qualifier near pricing:
 
 "Model speed and capability depend on the phone hardware. Low-RAM devices use smaller models and may be best for simple chat, explanations, and lightweight code assistance."
+
+## Proof Asset Alignment
+
+Every launch video, creator post, or sales-call recording should show the same proof sequence as `docs/DEVSTACK_DEMO.md`:
+
+- Phone shot: the Android phone is visibly connected by USB.
+- Status shot: `pro-ai-server status` shows the local server path is ready.
+- IDE shot: VS Code or Cursor shows Continue connected to the local endpoint.
+- Chat proof: Continue answers a small coding question.
+- Code assistance proof: autocomplete or chat applies one small useful edit.
+- CTA: the customer is pointed to trial entry, starter install, or pro install.
+
+Keep the offer message aligned with the launch copy: private AI coding assistant, local-first over USB, and no monthly AI model bill for supported local workflows. Always include the hardware qualifier when showing a low-RAM phone or a slow response.
