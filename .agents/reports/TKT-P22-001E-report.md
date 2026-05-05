@@ -38,11 +38,18 @@ Completed.
 - `.\\.venv\\Scripts\\python.exe -m pytest`
   - 413 passed
 
-## Hardware Notes
+## Hardware Evidence
 
-- Live Moto setup verification was attempted, but ADB reported `ZY22GKMWPN offline`.
-- Previous live compatibility evidence remains: Moto g 5G (2022), Android 13, arm64-v8a, 5.54 GB RAM, yellow tier, lightweight model tier.
+- `.\\.venv\\Scripts\\pro-ai-server.exe android-compatibility --serial ZY22GKMWPN`
+  - Moto g 5G (2022), Android 13, arm64-v8a, 5.54 GB RAM.
+  - Compatibility tier: yellow.
+  - Model tier: lightweight.
+- `.\\.venv\\Scripts\\pro-ai-server.exe setup --production --serial ZY22GKMWPN --no-continue --no-tunnel`
+  - Production installer plan used lightweight profile.
+  - Output showed `Production compatibility tier: yellow`.
+  - Output showed `Production model profile: lightweight`.
+  - Model profile selection used `qwen2.5-coder:1.5b` chat and `qwen2.5-coder:0.5b` autocomplete.
 
 ## Follow-Up
 
-- Re-run `pro-ai-server setup --production --serial ZY22GKMWPN --no-continue --no-tunnel` once the phone is authorized again.
+- Continue Termux/Termux:API installation and rerun hardware smoke.

@@ -165,6 +165,7 @@ Completed:
 - ADB detection.
 - Hardware scan.
 - Production setup plan.
+- Production setup now uses compatibility model tier: yellow/lightweight for Moto g 5G.
 - USB reverse tunnel on port 11434.
 - F-Droid package pages opened with `pro-ai-server install-termux-apps --serial ZY22GKMWPN`.
 - VS Code and Cursor Continue readiness through `pro-ai-server doctor`.
