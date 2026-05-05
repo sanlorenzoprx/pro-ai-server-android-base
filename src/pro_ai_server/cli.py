@@ -83,6 +83,7 @@ from pro_ai_server.ide import detect_ide_clis
 from pro_ai_server.ide import detect_continue_extension_status
 from pro_ai_server.ide import install_continue_extension
 from pro_ai_server.ide import installed_ide_clis
+from pro_ai_server.installer_ui import build_installer_ui_flow, render_installer_ui_flow
 from pro_ai_server.models import model_plan_for_profile, model_plan_for_ram
 from pro_ai_server.ollama import (
     DEFAULT_TEST_PROMPT,
@@ -100,7 +101,7 @@ from pro_ai_server.rag.store import IndexStore
 from pro_ai_server.release_validation import validate_release_layout
 from pro_ai_server.script_delivery import build_script_delivery_plan
 from pro_ai_server.setup_receipt import build_setup_receipt, render_setup_receipt
-from pro_ai_server.setup_workflow import plan_production_installer, plan_setup_workflow
+from pro_ai_server.setup_workflow import mark_production_step_failed, plan_production_installer, plan_setup_workflow
 from pro_ai_server.status import build_status_report, render_status_report
 from pro_ai_server.termux_readiness import (
     assess_termux_readiness,
@@ -1358,6 +1359,36 @@ def setup(
         console.print("[red]Setup failed while running an external command.[/red]")
         console.print(str(exc))
         raise typer.Exit(code=1) from exc
+
+
+@app.command("installer-ui")
+def installer_ui(
+    profile_name: str | None = typer.Option(None, "--profile", help="Model profile to preview."),
+    ram_gb: float | None = typer.Option(None, help="Optional RAM value used to select a profile."),
+    mock_failure: str | None = typer.Option(None, help="Optional production step key to show as a recoverable error."),
+) -> None:
+    """Preview the simple installer UI flow without mutating a phone."""
+    try:
+        plan = plan_production_installer(
+            mode="usb",
+            ram_gb=ram_gb,
+            profile=profile_name,
+            configure_continue=True,
+            create_usb_tunnel=True,
+            push_scripts=True,
+        )
+        if mock_failure:
+            plan = mark_production_step_failed(
+                plan,
+                mock_failure,
+                message=f"Mock failure at {mock_failure}.",
+                debug_detail=f"mocked step failure: {mock_failure}",
+            )
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    console.print(render_installer_ui_flow(build_installer_ui_flow(plan)))
 
 
 @app.command()

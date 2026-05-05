@@ -59,6 +59,29 @@ def test_setup_production_allows_lan_with_advanced_exposure():
     assert "Plan only" in result.output
 
 
+def test_installer_ui_preview_prints_mockable_usb_flow():
+    runner = CliRunner()
+
+    result = runner.invoke(cli.app, ["installer-ui"])
+
+    assert result.exit_code == 0
+    assert "Pro AI Server Installer" in result.output
+    assert "Welcome and USB debugging checklist" in result.output
+    assert "Advanced network modes visible: no" in result.output
+    assert "Success receipt" in result.output
+
+
+def test_installer_ui_preview_can_render_recoverable_error():
+    runner = CliRunner()
+
+    result = runner.invoke(cli.app, ["installer-ui", "--mock-failure", "termux-readiness"])
+
+    assert result.exit_code == 0
+    assert "Recoverable error" in result.output
+    assert "Mock failure at termux-readiness" in result.output
+    assert "mocked step failure: termux-readiness" in result.output
+
+
 def test_setup_execute_refuses_continue_config_without_yes():
     runner = CliRunner()
 
