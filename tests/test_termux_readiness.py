@@ -3,8 +3,10 @@ from pro_ai_server.termux_readiness import (
     TERMUX_HOME,
     TERMUX_PACKAGE,
     assess_termux_readiness,
+    build_package_installer_command,
     build_termux_package_info_command,
     build_termux_readiness_commands,
+    parse_package_installer,
 )
 
 
@@ -81,3 +83,23 @@ def test_builds_readiness_commands_with_serial():
         "package",
         TERMUX_PACKAGE,
     )
+
+
+def test_package_installer_command_and_parser():
+    command = build_package_installer_command("com.termux", serial="ABC123")
+
+    assert command == ("adb", "-s", "ABC123", "shell", "cmd", "package", "list", "packages", "-i", "com.termux")
+    assert build_package_installer_command("com.termux", serial="ABC123", adb="bundled-adb") == (
+        "bundled-adb",
+        "-s",
+        "ABC123",
+        "shell",
+        "cmd",
+        "package",
+        "list",
+        "packages",
+        "-i",
+        "com.termux",
+    )
+    assert parse_package_installer("package:com.termux installer=org.fdroid.fdroid", "com.termux") == "org.fdroid.fdroid"
+    assert parse_package_installer("package:com.other installer=org.fdroid.fdroid", "com.termux") is None

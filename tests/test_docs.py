@@ -45,6 +45,7 @@ def test_cli_workflow_documents_windows_first_flow_and_safety_claims():
         "pro-ai-server validate-platform-tools",
         "pro-ai-server validate-release",
         "pro-ai-server scan --serial",
+        "pro-ai-server android-compatibility",
         "pro-ai-server termux-check",
         "pro-ai-server install-termux-apps",
         "pro-ai-server generate-scripts",
@@ -86,6 +87,7 @@ def test_cli_workflow_documents_windows_first_flow_and_safety_claims():
         "--termux-url",
         "--termux-sha256",
         "install unknown apps",
+        "docs/android_compatibility.md",
         "concise readiness view",
         "127.0.0.1:11434",
         "adb reverse tcp:11434 tcp:11434",
@@ -310,6 +312,7 @@ def test_production_rc_doc_documents_hardware_packaged_exe_and_go_no_go():
         "scripts/build-windows-exe.ps1",
         "dist\\pro-ai-server\\pro-ai-server.exe validate-release",
         "scripts/smoke-production-installer.ps1 -withphone",
+        "pro-ai-server android-compatibility",
         "pro-ai-server setup --execute --yes",
         "pro-ai-server install-termux-apps",
         "pro-ai-server tunnel",
@@ -340,6 +343,7 @@ def test_production_rc_doc_documents_hardware_smoke_matrix_fields():
         "detected serial",
         "usb debugging authorization",
         "ram profile",
+        "compatibility tier",
         "selected chat model",
         "selected autocomplete model",
         "run checklist",
@@ -370,6 +374,33 @@ def test_production_rc_doc_documents_hardware_smoke_matrix_fields():
         "ollama endpoint",
     ):
         assert expected in rc
+
+
+def test_android_compatibility_doc_documents_tiers_manifest_and_trust_lanes():
+    compatibility = read_doc("docs/ANDROID_COMPATIBILITY.md")
+
+    for expected in (
+        "compatibility tiers",
+        "green",
+        "yellow",
+        "red",
+        "android 7.0 or newer",
+        "arm64-v8a",
+        "professional",
+        "lightweight",
+        "trust lane rules",
+        "play store termux",
+        "f-droid",
+        "termux:api",
+        "apk manifest template",
+        "package_name",
+        "min_android",
+        "max_android",
+        "sha256",
+        "checksum mismatch",
+        "docs/production_rc.md",
+    ):
+        assert expected in compatibility
 
 
 def test_production_smoke_script_documents_no_phone_and_phone_paths():

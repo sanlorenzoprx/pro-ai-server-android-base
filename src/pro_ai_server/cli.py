@@ -67,6 +67,7 @@ from pro_ai_server.agent.ticketizer import (
     select_accepted_recommendations,
     write_ticket_drafts,
 )
+from pro_ai_server.android_compatibility import assess_android_compatibility, render_android_compatibility
 from pro_ai_server.continue_config import devstack_restore_instructions, exposure_warnings, write_continue_config
 from pro_ai_server.device_scan import (
     DeviceScanOutputs,
@@ -111,8 +112,10 @@ from pro_ai_server.termux_readiness import (
     TERMUX_API_PACKAGE,
     TERMUX_PACKAGE,
     assess_termux_readiness,
+    build_package_installer_command,
     build_termux_package_info_command,
     build_termux_readiness_commands,
+    parse_package_installer,
     parse_pm_path_installed,
 )
 from pro_ai_server.termux_scripts import generate_termux_scripts, write_termux_scripts
@@ -362,6 +365,67 @@ def scan(serial: str | None = typer.Option(None, help="ADB device serial to use 
             console.print(f"[yellow]{line}[/yellow]")
         else:
             console.print(line)
+
+
+@app.command("android-compatibility")
+def android_compatibility(
+    serial: str | None = typer.Option(None, help="ADB device serial to use when multiple phones are connected."),
+) -> None:
+    """Classify Android compatibility before bootstrap or model install."""
+    adb = resolve_adb()
+    if not adb:
+        console.print("[red]adb not found. Release builds should include bundled platform-tools.[/red]")
+        raise typer.Exit(code=1)
+
+    try:
+        selected_serial = select_device_serial(adb, serial)
+        commands = build_device_scan_commands(adb, selected_serial)
+        profile = build_device_profile_from_scan_outputs(
+            selected_serial,
+            DeviceScanOutputs(
+                meminfo=run_command(list(commands.meminfo)),
+                storage=run_command(list(commands.storage)),
+                abi=run_command(list(commands.abi)),
+                android_version=run_command(list(commands.android_version)),
+                manufacturer=run_command(list(commands.manufacturer)),
+                model=run_command(list(commands.model)),
+                battery=run_command(list(commands.battery)),
+            ),
+        )
+        termux_installer = parse_package_installer(
+            run_optional_command(list(build_package_installer_command(TERMUX_PACKAGE, selected_serial, adb=adb))),
+            TERMUX_PACKAGE,
+        )
+        termux_api_installer = parse_package_installer(
+            run_optional_command(list(build_package_installer_command(TERMUX_API_PACKAGE, selected_serial, adb=adb))),
+            TERMUX_API_PACKAGE,
+        )
+    except CommandError as exc:
+        console.print("[red]Android compatibility check failed while running ADB.[/red]")
+        console.print(str(exc))
+        raise typer.Exit(code=1) from exc
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    console.print(f"Device: {profile.manufacturer} {profile.model} ({selected_serial})")
+    console.print(f"Android: {profile.android_version}")
+    console.print(f"ABI: {profile.abi}")
+    console.print(f"RAM: {profile.ram_gb:.2f} GB")
+    if termux_installer:
+        console.print(f"Termux installer: {termux_installer}")
+    if termux_api_installer:
+        console.print(f"Termux:API installer: {termux_api_installer}")
+
+    result = assess_android_compatibility(
+        profile,
+        termux_installer=termux_installer,
+        termux_api_installer=termux_api_installer,
+    )
+    for line in render_android_compatibility(result):
+        console.print(line)
+    if not result.supported:
+        raise typer.Exit(code=1)
 
 
 @app.command()

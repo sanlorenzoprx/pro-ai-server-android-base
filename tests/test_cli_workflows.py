@@ -119,6 +119,115 @@ def test_validate_platform_tools_reports_missing_required_files(tmp_path):
     assert "adb.exe" in result.output
 
 
+def test_android_compatibility_reports_green_device(monkeypatch):
+    runner = CliRunner()
+
+    def fake_run(command, capture_output, text):
+        import subprocess
+
+        outputs = {
+            ("adb", "devices"): "List of devices attached\nABC123\tdevice\n",
+            ("adb", "-s", "ABC123", "shell", "cat", "/proc/meminfo"): "MemTotal: 6291456 kB",
+            ("adb", "-s", "ABC123", "shell", "df", "-k", "/data"): (
+                "Filesystem 1K-blocks Used Available Use% Mounted on\n/dev/block/dm-2 100 1 67108864 1% /data"
+            ),
+            ("adb", "-s", "ABC123", "shell", "getprop", "ro.product.cpu.abi"): "arm64-v8a\n",
+            ("adb", "-s", "ABC123", "shell", "getprop", "ro.build.version.release"): "13\n",
+            ("adb", "-s", "ABC123", "shell", "getprop", "ro.product.manufacturer"): "Google\n",
+            ("adb", "-s", "ABC123", "shell", "getprop", "ro.product.model"): "Pixel Test\n",
+            ("adb", "-s", "ABC123", "shell", "dumpsys", "battery"): "level: 55",
+            (
+                "adb",
+                "-s",
+                "ABC123",
+                "shell",
+                "cmd",
+                "package",
+                "list",
+                "packages",
+                "-i",
+                "com.termux",
+            ): "package:com.termux installer=org.fdroid.fdroid",
+            (
+                "adb",
+                "-s",
+                "ABC123",
+                "shell",
+                "cmd",
+                "package",
+                "list",
+                "packages",
+                "-i",
+                "com.termux.api",
+            ): "package:com.termux.api installer=org.fdroid.fdroid",
+        }
+        return subprocess.CompletedProcess(command, 0, stdout=outputs[tuple(command)], stderr="")
+
+    monkeypatch.setattr(cli, "resolve_adb", lambda: "adb")
+    monkeypatch.setattr(cli.subprocess, "run", fake_run)
+
+    result = runner.invoke(cli.app, ["android-compatibility"])
+
+    assert result.exit_code == 0
+    assert "Compatibility tier: green" in result.output
+    assert "Model tier: professional" in result.output
+    assert "Termux installer: org.fdroid.fdroid" in result.output
+
+
+def test_android_compatibility_exits_nonzero_for_play_store_termux(monkeypatch):
+    runner = CliRunner()
+
+    def fake_run(command, capture_output, text):
+        import subprocess
+
+        outputs = {
+            ("adb", "devices"): "List of devices attached\nABC123\tdevice\n",
+            ("adb", "-s", "ABC123", "shell", "cat", "/proc/meminfo"): "MemTotal: 6291456 kB",
+            ("adb", "-s", "ABC123", "shell", "df", "-k", "/data"): (
+                "Filesystem 1K-blocks Used Available Use% Mounted on\n/dev/block/dm-2 100 1 67108864 1% /data"
+            ),
+            ("adb", "-s", "ABC123", "shell", "getprop", "ro.product.cpu.abi"): "arm64-v8a\n",
+            ("adb", "-s", "ABC123", "shell", "getprop", "ro.build.version.release"): "13\n",
+            ("adb", "-s", "ABC123", "shell", "getprop", "ro.product.manufacturer"): "Google\n",
+            ("adb", "-s", "ABC123", "shell", "getprop", "ro.product.model"): "Pixel Test\n",
+            ("adb", "-s", "ABC123", "shell", "dumpsys", "battery"): "level: 55",
+            (
+                "adb",
+                "-s",
+                "ABC123",
+                "shell",
+                "cmd",
+                "package",
+                "list",
+                "packages",
+                "-i",
+                "com.termux",
+            ): "package:com.termux installer=com.android.vending",
+            (
+                "adb",
+                "-s",
+                "ABC123",
+                "shell",
+                "cmd",
+                "package",
+                "list",
+                "packages",
+                "-i",
+                "com.termux.api",
+            ): "",
+        }
+        return subprocess.CompletedProcess(command, 0, stdout=outputs[tuple(command)], stderr="")
+
+    monkeypatch.setattr(cli, "resolve_adb", lambda: "adb")
+    monkeypatch.setattr(cli.subprocess, "run", fake_run)
+
+    result = runner.invoke(cli.app, ["android-compatibility"])
+
+    assert result.exit_code == 1
+    assert "Compatibility tier: red" in result.output
+    assert "Play Store Termux" in result.output
+
+
 def test_termux_check_reports_ready_phone(monkeypatch):
     runner = CliRunner()
     outputs = {

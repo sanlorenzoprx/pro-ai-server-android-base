@@ -76,6 +76,14 @@ def build_termux_package_info_command(serial: str | None = None) -> Command:
     return _adb_command(("shell", "dumpsys", "package", TERMUX_PACKAGE), serial=serial)
 
 
+def build_package_installer_command(
+    package_name: str,
+    serial: str | None = None,
+    adb: str = "adb",
+) -> Command:
+    return _adb_command(("shell", "cmd", "package", "list", "packages", "-i", package_name), serial=serial, adb=adb)
+
+
 def build_pm_path_command(package_name: str, serial: str | None = None) -> Command:
     return _adb_command(("shell", "pm", "path", package_name), serial=serial)
 
@@ -100,6 +108,16 @@ def parse_termux_version_hint(package_info_output: str) -> str | None:
         stripped = line.strip()
         if stripped.startswith("versionName="):
             return stripped.removeprefix("versionName=").strip() or None
+    return None
+
+
+def parse_package_installer(output: str, package_name: str) -> str | None:
+    needle = f"package:{package_name} installer="
+    for line in output.splitlines():
+        stripped = line.strip()
+        if stripped.startswith(needle):
+            installer = stripped.removeprefix(needle).strip()
+            return installer or None
     return None
 
 
@@ -136,7 +154,7 @@ def _home_initialized_check(output: str) -> TermuxReadinessCheck:
     )
 
 
-def _adb_command(args: tuple[str, ...], serial: str | None) -> Command:
+def _adb_command(args: tuple[str, ...], serial: str | None, adb: str = "adb") -> Command:
     if serial:
-        return ("adb", "-s", serial, *args)
-    return ("adb", *args)
+        return (adb, "-s", serial, *args)
+    return (adb, *args)

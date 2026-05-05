@@ -54,6 +54,14 @@ pro-ai-server scan --serial <device-serial>
 
 The scan reads Android version, ABI, RAM, storage, battery, and model information over ADB, then recommends a model profile.
 
+Before installing APKs or models, classify Android compatibility:
+
+```powershell
+pro-ai-server android-compatibility --serial <device-serial>
+```
+
+See `docs/ANDROID_COMPATIBILITY.md` for green/yellow/red tiers, APK manifest rules, and Termux trust lane guidance.
+
 ## 5. Check Termux Readiness
 
 ```powershell
