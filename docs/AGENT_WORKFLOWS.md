@@ -32,6 +32,14 @@ pro-ai-server configure-devstack --ram-gb 4
 
 The DevStack preset writes Continue config for `http://localhost:11434`, uses the selected hardware profile for chat and autocomplete models, backs up an existing `%USERPROFILE%\.continue\config.yaml`, and prints restore instructions.
 
+Run the repeatable demo and pre-call smoke path from:
+
+```text
+docs/DEVSTACK_DEMO.md
+```
+
+The demo shows a USB-connected Android phone, Pro AI Server status, Continue in VS Code or Cursor, local chat, coding assistance, and the "no monthly AI model bill" positioning for supported local workflows.
+
 ## Prime
 
 ```powershell

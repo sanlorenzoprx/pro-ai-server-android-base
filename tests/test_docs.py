@@ -144,6 +144,33 @@ def test_release_doc_documents_windows_first_release_gates_and_smoke_flow():
         assert expected in release
 
 
+def test_devstack_demo_documents_launch_script_and_smoke_path():
+    demo = read_doc("docs/DEVSTACK_DEMO.md")
+    workflows = read_doc("docs/AGENT_WORKFLOWS.md")
+
+    for expected in (
+        "android phone connected by usb",
+        "pro-ai-server status",
+        "pro-ai-server tunnel",
+        "pro-ai-server test-prompt",
+        "pro-ai-server devstack-ide-status",
+        "pro-ai-server configure-devstack",
+        "http://localhost:11434",
+        "vs code or cursor",
+        "continue extension",
+        "coding assistance",
+        "no monthly ai model bill",
+        "performance depends on the phone hardware",
+        "low-ram",
+        "first-token latency",
+    ):
+        assert expected in demo
+
+    assert "docs/devstack_demo.md" in workflows
+    assert "usb-connected android phone" in workflows
+    assert "no monthly ai model bill" in workflows
+
+
 def test_production_smoke_script_documents_no_phone_and_phone_paths():
     smoke = read_doc("scripts/smoke-production-installer.ps1")
 
