@@ -183,6 +183,120 @@ def test_termux_check_exits_nonzero_when_api_is_missing(monkeypatch):
     assert "Termux:API is not installed" in result.output
 
 
+def test_install_termux_apps_opens_fdroid_pages_when_missing(monkeypatch):
+    runner = CliRunner()
+    commands = []
+
+    def fake_run(command, capture_output, text):
+        import subprocess
+
+        commands.append(command)
+        if command == ["adb", "devices"]:
+            return subprocess.CompletedProcess(command, 0, stdout="List of devices attached\nABC123\tdevice\n", stderr="")
+        if command in (
+            ["adb", "-s", "ABC123", "shell", "pm", "path", "com.termux"],
+            ["adb", "-s", "ABC123", "shell", "pm", "path", "com.termux.api"],
+        ):
+            return subprocess.CompletedProcess(command, 1, stdout="", stderr="package not found")
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(cli, "resolve_adb", lambda: "adb")
+    monkeypatch.setattr(cli.subprocess, "run", fake_run)
+
+    result = runner.invoke(cli.app, ["install-termux-apps"])
+
+    assert result.exit_code == 0
+    assert [
+        "adb",
+        "-s",
+        "ABC123",
+        "shell",
+        "am",
+        "start",
+        "-a",
+        "android.intent.action.VIEW",
+        "-d",
+        "https://f-droid.org/packages/com.termux/",
+    ] in commands
+    assert [
+        "adb",
+        "-s",
+        "ABC123",
+        "shell",
+        "am",
+        "start",
+        "-a",
+        "android.intent.action.VIEW",
+        "-d",
+        "https://f-droid.org/packages/com.termux.api/",
+    ] in commands
+    assert "Opened" in result.output
+    assert "termux-check --serial ABC123" in result.output
+
+
+def test_install_termux_apps_installs_local_apks_with_yes(monkeypatch, tmp_path):
+    runner = CliRunner()
+    termux_apk = tmp_path / "termux.apk"
+    termux_api_apk = tmp_path / "termux-api.apk"
+    termux_apk.write_text("apk", encoding="utf-8")
+    termux_api_apk.write_text("apk", encoding="utf-8")
+    commands = []
+
+    def fake_run(command, capture_output, text):
+        import subprocess
+
+        commands.append(command)
+        if command == ["adb", "devices"]:
+            return subprocess.CompletedProcess(command, 0, stdout="List of devices attached\nABC123\tdevice\n", stderr="")
+        if command in (
+            ["adb", "-s", "ABC123", "shell", "pm", "path", "com.termux"],
+            ["adb", "-s", "ABC123", "shell", "pm", "path", "com.termux.api"],
+        ):
+            return subprocess.CompletedProcess(command, 1, stdout="", stderr="package not found")
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(cli, "resolve_adb", lambda: "adb")
+    monkeypatch.setattr(cli.subprocess, "run", fake_run)
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "install-termux-apps",
+            "--termux-apk",
+            str(termux_apk),
+            "--termux-api-apk",
+            str(termux_api_apk),
+            "--yes",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert ["adb", "-s", "ABC123", "install", "-r", str(termux_apk)] in commands
+    assert ["adb", "-s", "ABC123", "install", "-r", str(termux_api_apk)] in commands
+    assert "Installed" in result.output
+
+
+def test_install_termux_apps_refuses_local_apk_without_yes(monkeypatch, tmp_path):
+    runner = CliRunner()
+    termux_apk = tmp_path / "termux.apk"
+    termux_apk.write_text("apk", encoding="utf-8")
+
+    def fake_run(command, capture_output, text):
+        import subprocess
+
+        if command == ["adb", "devices"]:
+            return subprocess.CompletedProcess(command, 0, stdout="List of devices attached\nABC123\tdevice\n", stderr="")
+        return subprocess.CompletedProcess(command, 1, stdout="", stderr="package not found")
+
+    monkeypatch.setattr(cli, "resolve_adb", lambda: "adb")
+    monkeypatch.setattr(cli.subprocess, "run", fake_run)
+
+    result = runner.invoke(cli.app, ["install-termux-apps", "--termux-apk", str(termux_apk)])
+
+    assert result.exit_code == 1
+    assert "without --yes" in result.output
+
+
 def test_validate_release_reports_issues(monkeypatch, tmp_path):
     runner = CliRunner()
 

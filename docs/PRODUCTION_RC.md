@@ -35,6 +35,7 @@ Run real hardware smoke with a connected Android phone:
 ```powershell
 scripts/smoke-production-installer.ps1 -WithPhone
 pro-ai-server setup --execute --yes
+pro-ai-server install-termux-apps --serial ZY22GKMWPN
 pro-ai-server tunnel
 pro-ai-server test-prompt
 pro-ai-server status
@@ -107,7 +108,7 @@ Recovery log:
 |---|---|---|---|
 | ADB did not initially see phone | Unlocked phone, restarted ADB, rescanned | Resolved; device detected as ZY22GKMWPN | No |
 | `df /data` mounted at `/storage/emulated/0/Android/obb` | Updated storage parser to accept single-row Android storage mount output | Resolved; scan reports 125.54 GB free | No |
-| Termux missing | Ran `termux-check` and `push-scripts` to confirm blocker | Blocked until Termux and Termux:API are installed and opened once | Yes |
+| Termux missing | Added `install-termux-apps`; F-Droid is installed and the command opens Termux and Termux:API package pages or installs supplied APKs with `--yes` | Blocked until Termux and Termux:API are installed and opened once | Yes |
 | Ollama unavailable | Ran `status`, `server-check`, and `test-prompt` after USB tunnel | Blocked until phone-side Ollama server is installed and running | Yes |
 
 ## Hardware Smoke Attempts
@@ -159,6 +160,7 @@ Completed:
 - Hardware scan.
 - Production setup plan.
 - USB reverse tunnel on port 11434.
+- F-Droid package pages opened with `pro-ai-server install-termux-apps --serial ZY22GKMWPN`.
 - VS Code and Cursor Continue readiness through `pro-ai-server doctor`.
 
 Blocked:
@@ -169,6 +171,8 @@ Blocked:
 - Test prompt: Ollama endpoint at `http://localhost:11434` is not reachable.
 
 Release impact: blocks full hardware smoke until Termux, Termux:API, Ollama, and selected models are installed on the phone.
+
+Automation note: use `pro-ai-server install-termux-apps --serial ZY22GKMWPN` to open the required F-Droid package pages, or provide reviewed local APKs with `--termux-apk`, `--termux-api-apk`, and `--yes` for an ADB install path.
 
 ## Packaged Exe Evidence
 

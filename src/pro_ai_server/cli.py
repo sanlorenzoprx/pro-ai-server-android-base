@@ -105,9 +105,12 @@ from pro_ai_server.setup_receipt import build_setup_receipt, render_setup_receip
 from pro_ai_server.setup_workflow import mark_production_step_failed, plan_production_installer, plan_setup_workflow
 from pro_ai_server.status import build_status_report, render_status_report
 from pro_ai_server.termux_readiness import (
+    TERMUX_API_PACKAGE,
+    TERMUX_PACKAGE,
     assess_termux_readiness,
     build_termux_package_info_command,
     build_termux_readiness_commands,
+    parse_pm_path_installed,
 )
 from pro_ai_server.termux_scripts import generate_termux_scripts, write_termux_scripts
 from pro_ai_server.tailscale import build_tailscale_install_plan
@@ -118,6 +121,9 @@ app = typer.Typer(help="Pro AI Server: Android phone local AI server manager.")
 agent_app = typer.Typer(help="Agentic CodeFlow workflow commands.")
 app.add_typer(agent_app, name="agent")
 console = Console()
+
+TERMUX_FDROID_URL = "https://f-droid.org/packages/com.termux/"
+TERMUX_API_FDROID_URL = "https://f-droid.org/packages/com.termux.api/"
 
 
 @dataclass
@@ -494,6 +500,95 @@ def termux_check(
             console.print(f"  Next: {check.instruction}")
     if not result.ok:
         raise typer.Exit(code=1)
+
+
+@app.command("install-termux-apps")
+def install_termux_apps(
+    serial: str | None = typer.Option(None, help="ADB device serial to use when multiple phones are connected."),
+    termux_apk: Path | None = typer.Option(None, "--termux-apk", help="Optional local Termux APK to install."),
+    termux_api_apk: Path | None = typer.Option(
+        None,
+        "--termux-api-apk",
+        help="Optional local Termux:API APK to install.",
+    ),
+    yes: bool = typer.Option(False, "--yes", help="Confirm local APK installation actions."),
+) -> None:
+    """Install or open trusted install pages for Termux and Termux:API."""
+    adb = resolve_adb()
+    if not adb:
+        console.print("[red]adb not found. Release builds should include bundled platform-tools.[/red]")
+        raise typer.Exit(code=1)
+
+    for label, apk in (("Termux", termux_apk), ("Termux:API", termux_api_apk)):
+        if apk is not None and not apk.exists():
+            console.print(f"[red]{label} APK not found:[/red] {apk}")
+            raise typer.Exit(code=1)
+
+    try:
+        selected_serial = select_device_serial(adb, serial)
+        console.print(f"Device: {selected_serial}")
+
+        _install_or_open_termux_app(
+            adb=adb,
+            serial=selected_serial,
+            label="Termux",
+            package_name=TERMUX_PACKAGE,
+            apk=termux_apk,
+            fdroid_url=TERMUX_FDROID_URL,
+            yes=yes,
+        )
+        _install_or_open_termux_app(
+            adb=adb,
+            serial=selected_serial,
+            label="Termux:API",
+            package_name=TERMUX_API_PACKAGE,
+            apk=termux_api_apk,
+            fdroid_url=TERMUX_API_FDROID_URL,
+            yes=yes,
+        )
+    except CommandError as exc:
+        console.print("[red]Termux app install automation failed while running an external command.[/red]")
+        console.print(str(exc))
+        raise typer.Exit(code=1) from exc
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    console.print("After installing, open Termux once so its home directory initializes.")
+    console.print(f"Then run: pro-ai-server termux-check --serial {selected_serial}")
+
+
+def _install_or_open_termux_app(
+    *,
+    adb: str,
+    serial: str,
+    label: str,
+    package_name: str,
+    apk: Path | None,
+    fdroid_url: str,
+    yes: bool,
+) -> None:
+    installed_output = run_optional_command(adb_command(adb, ["shell", "pm", "path", package_name], serial))
+    if parse_pm_path_installed(installed_output):
+        console.print(f"[green]OK[/green] {label} is installed.")
+        return
+
+    if apk is not None:
+        if not yes:
+            console.print(f"[red]Refusing to install {label} APK without --yes.[/red]")
+            raise typer.Exit(code=1)
+        run_command(adb_command(adb, ["install", "-r", str(apk)], serial))
+        console.print(f"[green]Installed[/green] {label} APK on Android device {serial}.")
+        return
+
+    run_command(
+        adb_command(
+            adb,
+            ["shell", "am", "start", "-a", "android.intent.action.VIEW", "-d", fdroid_url],
+            serial,
+        )
+    )
+    console.print(f"[yellow]Opened[/yellow] {label} F-Droid page on Android device {serial}.")
 
 
 @app.command()

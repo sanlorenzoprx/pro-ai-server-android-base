@@ -68,6 +68,20 @@ With multiple devices:
 pro-ai-server termux-check --serial <device-serial>
 ```
 
+If Termux or Termux:API is missing, open their F-Droid install pages on the connected phone:
+
+```powershell
+pro-ai-server install-termux-apps --serial <device-serial>
+```
+
+For fully scripted installs with locally reviewed APK files:
+
+```powershell
+pro-ai-server install-termux-apps --serial <device-serial> --termux-apk C:\path\to\termux.apk --termux-api-apk C:\path\to\termux-api.apk --yes
+```
+
+After installing, open Termux once on the phone so its home directory initializes, then rerun `termux-check`.
+
 ## 6. Generate Termux Scripts
 
 ```powershell

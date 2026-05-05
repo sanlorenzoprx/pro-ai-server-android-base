@@ -44,6 +44,18 @@ pro-ai-server termux-check
 
 If Termux is missing, install Termux from F-Droid or GitHub, then open it once. If Termux:API is missing, install Termux:API, then rerun `termux-check`. If Termux home is not initialized, open Termux once on the phone so `/data/data/com.termux/files/home` exists.
 
+Use the installer helper to open the trusted F-Droid package pages on the connected phone:
+
+```powershell
+pro-ai-server install-termux-apps --serial <device-serial>
+```
+
+For a fully scripted path with local APKs that you already reviewed:
+
+```powershell
+pro-ai-server install-termux-apps --serial <device-serial> --termux-apk C:\path\to\termux.apk --termux-api-apk C:\path\to\termux-api.apk --yes
+```
+
 Termux:Widget manual placement is still required. Install Termux:Widget, confirm the generated `Start Pro AI Server` shortcut is in `~/.shortcuts`, then add the widget or shortcut from the Android home screen.
 
 ### Production installer stops at Termux readiness
