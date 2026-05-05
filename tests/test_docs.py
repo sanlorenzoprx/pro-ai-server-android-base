@@ -310,6 +310,43 @@ def test_production_rc_doc_documents_hardware_packaged_exe_and_go_no_go():
         assert expected in rc
 
 
+def test_production_rc_doc_documents_hardware_smoke_matrix_fields():
+    rc = read_doc("docs/PRODUCTION_RC.md")
+
+    for expected in (
+        "completed",
+        "blocked",
+        "skipped",
+        "device identity record",
+        "phone model",
+        "android version",
+        "detected serial",
+        "usb debugging authorization",
+        "ram profile",
+        "selected chat model",
+        "selected autocomplete model",
+        "run checklist",
+        "adb detection",
+        "termux readiness",
+        "script push",
+        "usb tunnel",
+        "server status",
+        "model inventory",
+        "test prompt",
+        "evidence log",
+        "terminal smoke output",
+        "diagnostics file",
+        "recovery log",
+        "blocks rc",
+        "hardware smoke attempts",
+        "initial android detection attempt",
+        "remote desktop",
+        "usb device redirection",
+        "oem android usb driver",
+    ):
+        assert expected in rc
+
+
 def test_production_smoke_script_documents_no_phone_and_phone_paths():
     smoke = read_doc("scripts/smoke-production-installer.ps1")
 
