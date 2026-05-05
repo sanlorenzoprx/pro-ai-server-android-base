@@ -312,10 +312,59 @@ def test_install_termux_apps_refuses_local_apk_without_yes(monkeypatch, tmp_path
     result = runner.invoke(cli.app, ["install-termux-apps", "--termux-apk", str(termux_apk)])
 
     assert result.exit_code == 1
-    assert "without --yes" in result.output
+    assert "F-Droid is not installed" in result.output
 
 
-def test_install_termux_apps_skips_unknown_app_permission_when_fdroid_missing(monkeypatch):
+def test_install_termux_apps_installs_fdroid_local_apk_with_yes(monkeypatch, tmp_path):
+    runner = CliRunner()
+    fdroid_apk = tmp_path / "fdroid.apk"
+    fdroid_apk.write_text("apk", encoding="utf-8")
+    commands = []
+
+    def fake_run(command, capture_output, text):
+        import subprocess
+
+        commands.append(command)
+        if command == ["adb", "devices"]:
+            return subprocess.CompletedProcess(command, 0, stdout="List of devices attached\nABC123\tdevice\n", stderr="")
+        if command == ["adb", "-s", "ABC123", "shell", "pm", "path", "org.fdroid.fdroid"]:
+            return subprocess.CompletedProcess(command, 1, stdout="", stderr="package not found")
+        if command == ["adb", "-s", "ABC123", "install", "-r", str(fdroid_apk)]:
+            return subprocess.CompletedProcess(command, 0, stdout="Success", stderr="")
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(cli, "resolve_adb", lambda: "adb")
+    monkeypatch.setattr(cli.subprocess, "run", fake_run)
+
+    result = runner.invoke(cli.app, ["install-termux-apps", "--fdroid-apk", str(fdroid_apk), "--yes"])
+
+    assert result.exit_code == 0
+    assert ["adb", "-s", "ABC123", "install", "-r", str(fdroid_apk)] in commands
+    assert "Installed" in result.output
+
+
+def test_install_termux_apps_refuses_fdroid_local_apk_without_yes(monkeypatch, tmp_path):
+    runner = CliRunner()
+    fdroid_apk = tmp_path / "fdroid.apk"
+    fdroid_apk.write_text("apk", encoding="utf-8")
+
+    def fake_run(command, capture_output, text):
+        import subprocess
+
+        if command == ["adb", "devices"]:
+            return subprocess.CompletedProcess(command, 0, stdout="List of devices attached\nABC123\tdevice\n", stderr="")
+        return subprocess.CompletedProcess(command, 1, stdout="", stderr="package not found")
+
+    monkeypatch.setattr(cli, "resolve_adb", lambda: "adb")
+    monkeypatch.setattr(cli.subprocess, "run", fake_run)
+
+    result = runner.invoke(cli.app, ["install-termux-apps", "--fdroid-apk", str(fdroid_apk)])
+
+    assert result.exit_code == 1
+    assert "F-Droid APK without --yes" in result.output
+
+
+def test_install_termux_apps_reports_missing_fdroid_before_termux_pages(monkeypatch):
     runner = CliRunner()
 
     def fake_run(command, capture_output, text):
@@ -332,6 +381,7 @@ def test_install_termux_apps_skips_unknown_app_permission_when_fdroid_missing(mo
 
     assert result.exit_code == 1
     assert "F-Droid is not installed" in result.output
+    assert "Provide --fdroid-apk" in result.output
 
 
 def test_validate_release_reports_issues(monkeypatch, tmp_path):

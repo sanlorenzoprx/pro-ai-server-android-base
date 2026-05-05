@@ -506,6 +506,7 @@ def termux_check(
 @app.command("install-termux-apps")
 def install_termux_apps(
     serial: str | None = typer.Option(None, help="ADB device serial to use when multiple phones are connected."),
+    fdroid_apk: Path | None = typer.Option(None, "--fdroid-apk", help="Optional local F-Droid APK to install."),
     termux_apk: Path | None = typer.Option(None, "--termux-apk", help="Optional local Termux APK to install."),
     termux_api_apk: Path | None = typer.Option(
         None,
@@ -520,7 +521,7 @@ def install_termux_apps(
         console.print("[red]adb not found. Release builds should include bundled platform-tools.[/red]")
         raise typer.Exit(code=1)
 
-    for label, apk in (("Termux", termux_apk), ("Termux:API", termux_api_apk)):
+    for label, apk in (("F-Droid", fdroid_apk), ("Termux", termux_apk), ("Termux:API", termux_api_apk)):
         if apk is not None and not apk.exists():
             console.print(f"[red]{label} APK not found:[/red] {apk}")
             raise typer.Exit(code=1)
@@ -528,6 +529,7 @@ def install_termux_apps(
     try:
         selected_serial = select_device_serial(adb, serial)
         console.print(f"Device: {selected_serial}")
+        _install_fdroid_app(adb=adb, serial=selected_serial, apk=fdroid_apk, yes=yes)
         _open_fdroid_unknown_app_permission(adb, selected_serial)
 
         _install_or_open_termux_app(
@@ -558,6 +560,26 @@ def install_termux_apps(
 
     console.print("After installing, open Termux once so its home directory initializes.")
     console.print(f"Then run: pro-ai-server termux-check --serial {selected_serial}")
+
+
+def _install_fdroid_app(*, adb: str, serial: str, apk: Path | None, yes: bool) -> None:
+    fdroid_output = run_optional_command(adb_command(adb, ["shell", "pm", "path", FDROID_PACKAGE], serial))
+    if parse_pm_path_installed(fdroid_output):
+        console.print("[green]OK[/green] F-Droid is installed.")
+        return
+
+    if apk is None:
+        console.print(
+            "[yellow]Missing[/yellow] F-Droid is not installed. "
+            "Provide --fdroid-apk with --yes for automated install, then rerun this command."
+        )
+        return
+
+    if not yes:
+        console.print("[red]Refusing to install F-Droid APK without --yes.[/red]")
+        raise typer.Exit(code=1)
+    run_command(adb_command(adb, ["install", "-r", str(apk)], serial))
+    console.print(f"[green]Installed[/green] F-Droid APK on Android device {serial}.")
 
 
 def _open_fdroid_unknown_app_permission(adb: str, serial: str) -> None:

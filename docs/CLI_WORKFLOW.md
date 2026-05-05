@@ -76,10 +76,16 @@ pro-ai-server install-termux-apps --serial <device-serial>
 
 When F-Droid is installed, this also opens Android's F-Droid "Install unknown apps" permission screen. Allow F-Droid there so Android permits Termux and Termux:API installs.
 
+If F-Droid is not installed yet, install a locally reviewed F-Droid APK first:
+
+```powershell
+pro-ai-server install-termux-apps --serial <device-serial> --fdroid-apk C:\path\to\fdroid.apk --yes
+```
+
 For fully scripted installs with locally reviewed APK files:
 
 ```powershell
-pro-ai-server install-termux-apps --serial <device-serial> --termux-apk C:\path\to\termux.apk --termux-api-apk C:\path\to\termux-api.apk --yes
+pro-ai-server install-termux-apps --serial <device-serial> --fdroid-apk C:\path\to\fdroid.apk --termux-apk C:\path\to\termux.apk --termux-api-apk C:\path\to\termux-api.apk --yes
 ```
 
 After installing, open Termux once on the phone so its home directory initializes, then rerun `termux-check`.

@@ -78,6 +78,7 @@ def test_cli_workflow_documents_windows_first_flow_and_safety_claims():
         "com.tailscale.ipn",
         "winget",
         "--android-apk",
+        "--fdroid-apk",
         "--termux-apk",
         "--termux-api-apk",
         "install unknown apps",
@@ -103,6 +104,7 @@ def test_troubleshooting_documents_phone_setup_and_mvp_failure_modes():
         "termux is missing",
         "termux:api is missing",
         "install unknown apps",
+        "--fdroid-apk",
         "termux home is not initialized",
         "ollama not responding on localhost:11434",
         "missing models",
@@ -355,6 +357,7 @@ def test_production_rc_doc_documents_hardware_smoke_matrix_fields():
         "termux and termux:api",
         "install-termux-apps",
         "install unknown apps",
+        "--fdroid-apk",
         "ollama endpoint",
     ):
         assert expected in rc

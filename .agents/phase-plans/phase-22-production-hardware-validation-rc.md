@@ -17,6 +17,7 @@ Move Pro AI Server and Pro Agentic Coding Server from build-ready to release-can
 | Ticket | Title | Depends On |
 |---|---|---|
 | TKT-P22-001 | Production hardware smoke matrix | Phase 20 installer, Phase 21 DevStack docs |
+| TKT-P22-001B | Automated F-Droid and Termux bootstrap install path | TKT-P22-001 |
 | TKT-P22-002 | Packaged Windows exe release-candidate smoke | TKT-P22-001 |
 | TKT-P22-003 | Live Continue IDE validation | TKT-P22-001, TKT-P22-002 |
 | TKT-P22-004 | Release evidence bundle | TKT-P22-002, TKT-P22-003 |
@@ -25,6 +26,7 @@ Move Pro AI Server and Pro Agentic Coding Server from build-ready to release-can
 ## Required Contracts
 
 - `.agents/contracts/phase-22/hardware-smoke-contract.md`
+- `.agents/contracts/phase-22/fdroid-termux-bootstrap-contract.md`
 - `.agents/contracts/phase-22/windows-rc-contract.md`
 - `.agents/contracts/phase-22/ide-live-validation-contract.md`
 - `.agents/contracts/phase-22/release-evidence-contract.md`
