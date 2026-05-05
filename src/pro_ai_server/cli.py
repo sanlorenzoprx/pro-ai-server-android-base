@@ -83,6 +83,7 @@ from pro_ai_server.ide import detect_ide_clis
 from pro_ai_server.ide import detect_continue_extension_status
 from pro_ai_server.ide import install_continue_extension
 from pro_ai_server.ide import installed_ide_clis
+from pro_ai_server.ide import launch_ide_readiness_matrix
 from pro_ai_server.installer_ui import build_installer_ui_flow, render_installer_ui_flow
 from pro_ai_server.models import model_plan_for_profile, model_plan_for_ram
 from pro_ai_server.ollama import (
@@ -252,6 +253,19 @@ def doctor() -> None:
                 )
             elif extension_status.error:
                 console.print(f"  [yellow]Unknown[/yellow] Continue extension status: {extension_status.error}")
+
+    console.print("DevStack launch IDEs: VS Code and Cursor. Follow-up: Windsurf and JetBrains.")
+
+
+@app.command("devstack-ide-status")
+def devstack_ide_status() -> None:
+    """Show DevStack launch IDE readiness for VS Code and Cursor."""
+    console.print("[bold]DevStack IDE readiness[/bold]")
+    for readiness in launch_ide_readiness_matrix():
+        support = "launch" if readiness.launch_supported else "follow-up"
+        installed = "installed" if readiness.ide.installed else "missing"
+        console.print(f"{readiness.ide.command}: {readiness.state} ({support}, CLI {installed})")
+        console.print(f"  Next: {readiness.next_action}")
 
 
 @app.command("install-continue-extension")

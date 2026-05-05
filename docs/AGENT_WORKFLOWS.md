@@ -2,6 +2,32 @@
 
 Phase 6 adds agent-ready context commands.
 
+## DevStack Launch IDE Readiness
+
+Phase 21 launch support is intentionally narrow:
+
+- Launch IDEs: VS Code (`code`) and Cursor (`cursor`)
+- Follow-up IDEs: Windsurf and JetBrains
+
+Check the launch matrix:
+
+```powershell
+pro-ai-server devstack-ide-status
+```
+
+Ready means the IDE CLI is installed and the Continue extension is present. If Continue is missing, install it with:
+
+```powershell
+pro-ai-server install-continue-extension --ide code
+pro-ai-server install-continue-extension --ide cursor
+```
+
+After an IDE is ready, write the USB Continue config:
+
+```powershell
+pro-ai-server configure-continue --mode usb
+```
+
 ## Prime
 
 ```powershell

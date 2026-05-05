@@ -4,7 +4,7 @@ from pro_ai_server import cli
 from pro_ai_server.continue_config import ContinueConfigWriteResult
 from pro_ai_server.diagnostics import DiagnosticsReport
 from pro_ai_server.gateway.ollama_client import OllamaProxyResult
-from pro_ai_server.ide import IdeCli, IdeExtensionStatus
+from pro_ai_server.ide import IdeCli, IdeExtensionStatus, IdeReadiness
 from pro_ai_server.ollama import OllamaServerStatus
 from pro_ai_server.release_validation import ReleaseValidationIssue, ReleaseValidationResult
 from pro_ai_server.status import ProAiStatus, StatusItem
@@ -1364,6 +1364,33 @@ def test_doctor_reports_missing_continue_extension(monkeypatch):
     assert "IDE CLI found: cursor" in result.output
     assert "Continue extension not installed" in result.output
     assert "install-continue-extension --ide cursor" in result.output
+    assert "DevStack launch IDEs: VS Code and Cursor" in result.output
+
+
+def test_devstack_ide_status_prints_launch_matrix(monkeypatch):
+    runner = CliRunner()
+
+    monkeypatch.setattr(
+        cli,
+        "launch_ide_readiness_matrix",
+        lambda: (
+            IdeReadiness(
+                ide=IdeCli(command="code", path="C:/bin/code.cmd"),
+                launch_supported=True,
+                follow_up=False,
+                continue_installed=True,
+                state="ready",
+                next_action="Run configure-continue.",
+            ),
+        ),
+    )
+
+    result = runner.invoke(cli.app, ["devstack-ide-status"])
+
+    assert result.exit_code == 0
+    assert "DevStack IDE readiness" in result.output
+    assert "code: ready (launch, CLI installed)" in result.output
+    assert "Run configure-continue" in result.output
 
 
 def test_install_continue_extension_command_installs_selected_ide(monkeypatch):
