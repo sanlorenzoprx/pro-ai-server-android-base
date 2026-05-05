@@ -120,6 +120,26 @@ def test_production_installer_has_stable_required_step_order():
     assert "13 stable steps" in plan.summary
 
 
+def test_production_installer_rejects_advanced_exposure_without_explicit_flag():
+    with pytest.raises(ValueError, match="defaults to USB mode"):
+        plan_production_installer(mode="lan", host="192.168.1.50")
+
+    with pytest.raises(ValueError, match="advanced exposure mode"):
+        plan_production_installer(mode="tailscale", host="pro-ai-phone")
+
+
+def test_production_installer_allows_advanced_exposure_when_explicit():
+    plan = plan_production_installer(
+        mode="lan",
+        host="192.168.1.50",
+        allow_advanced_exposure=True,
+    )
+
+    assert plan.mode == "lan"
+    assert plan.requires_confirmation is True
+    assert plan.warnings == ("LAN mode exposes Ollama to devices on the local network.",)
+
+
 def test_production_installer_reuses_setup_workflow_for_models_scripts_push_and_tunnel():
     plan = plan_production_installer(ram_gb=4.0, serial="device-123")
 

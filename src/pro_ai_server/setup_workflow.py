@@ -10,6 +10,7 @@ from pro_ai_server.termux_scripts import DEFAULT_SCRIPT_DIR, generate_termux_scr
 
 
 VALID_SETUP_MODES = {"usb", "lan", "tailscale"}
+ADVANCED_EXPOSURE_MODES = {"lan", "tailscale"}
 
 
 @dataclass(frozen=True)
@@ -181,6 +182,7 @@ def plan_production_installer(
     generated_termux_dir: Path = DEFAULT_SCRIPT_DIR,
     remote_termux_home: str = "/data/data/com.termux/files/home",
     serial: str | None = None,
+    allow_advanced_exposure: bool = False,
 ) -> ProductionInstallerPlan:
     """Build the stable production installer state machine.
 
@@ -190,8 +192,10 @@ def plan_production_installer(
     planning.
     """
 
+    normalized_mode = _normalize_mode(mode)
+    _ensure_production_exposure_allowed(normalized_mode, allow_advanced_exposure)
     setup_plan = plan_setup_workflow(
-        mode=mode,
+        mode=normalized_mode,
         host=host,
         ram_gb=ram_gb,
         profile=profile,
@@ -353,6 +357,14 @@ def _normalize_mode(mode: str) -> str:
         modes = ", ".join(sorted(VALID_SETUP_MODES))
         raise ValueError(f"Unknown setup mode '{mode}'. Expected one of: {modes}.")
     return normalized
+
+
+def _ensure_production_exposure_allowed(mode: str, allow_advanced_exposure: bool) -> None:
+    if mode in ADVANCED_EXPOSURE_MODES and not allow_advanced_exposure:
+        raise ValueError(
+            "Production installer defaults to USB mode. "
+            f"{mode} mode is an advanced exposure mode; re-run with --advanced-exposure after confirming this is intended."
+        )
 
 
 def _normalize_host(host: str | None) -> str | None:

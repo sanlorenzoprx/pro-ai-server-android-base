@@ -1191,6 +1191,11 @@ def setup(
     push: bool = typer.Option(False, "--push-scripts", help="Plan/push generated scripts to the phone."),
     execute: bool = typer.Option(False, help="Execute the planned local/device actions."),
     production: bool = typer.Option(False, "--production", help="Use the production installer state-machine plan."),
+    advanced_exposure: bool = typer.Option(
+        False,
+        "--advanced-exposure",
+        help="Allow LAN/Tailscale in production mode after explicitly accepting network exposure.",
+    ),
     yes: bool = typer.Option(False, "--yes", help="Confirm setup actions that write config or expose network mode."),
     output_dir: Path = typer.Option(Path("."), help="Directory where generated/termux will be written."),
     remote_home: str = typer.Option("/data/data/com.termux/files/home", help="Remote Termux home directory."),
@@ -1223,6 +1228,7 @@ def setup(
                 generated_termux_dir=output_dir / "generated" / "termux",
                 remote_termux_home=remote_home,
                 serial=serial,
+                allow_advanced_exposure=advanced_exposure,
             )
             plan = production_plan.setup_plan
     except ValueError as exc:
@@ -1408,6 +1414,7 @@ def status(api_base: str = typer.Option("http://localhost:11434", help="Ollama A
         ollama_status,
         ide_statuses,
         adb_path=adb,
+        api_base=api_base,
     )
     for line in render_status_report(report):
         if line.startswith("OK "):

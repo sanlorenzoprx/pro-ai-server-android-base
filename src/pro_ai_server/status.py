@@ -33,11 +33,13 @@ def build_status_report(
     ide_statuses: tuple[IdeExtensionStatus, ...],
     *,
     adb_path: str | None,
+    api_base: str = "http://localhost:11434",
 ) -> ProAiStatus:
     return ProAiStatus(
         items=(
             _adb_item(adb_devices_output, adb_path=adb_path),
             _tunnel_item(adb_reverse_output, adb_path=adb_path),
+            _exposure_item(api_base),
             _server_item(ollama_status),
             _ide_item(ide_statuses),
         )
@@ -68,6 +70,13 @@ def _tunnel_item(adb_reverse_output: str | None, *, adb_path: str | None) -> Sta
     if USB_REVERSE_PORT in adb_reverse_output:
         return StatusItem("USB tunnel", True, "adb reverse tcp:11434 is active")
     return StatusItem("USB tunnel", False, "adb reverse tcp:11434 is not active")
+
+
+def _exposure_item(api_base: str) -> StatusItem:
+    normalized = api_base.strip().lower().rstrip("/")
+    if normalized in {"http://localhost:11434", "http://127.0.0.1:11434"}:
+        return StatusItem("Exposure", True, "USB/local endpoint only")
+    return StatusItem("Exposure", None, f"advanced endpoint configured: {api_base}")
 
 
 def _server_item(ollama_status: OllamaServerStatus) -> StatusItem:

@@ -23,6 +23,7 @@ def test_status_report_marks_ready_phone_tunnel_server_and_ide():
     assert report.ok
     assert "OK Phone: connected (ABC123)" in rendered
     assert "OK USB tunnel: adb reverse tcp:11434 is active" in rendered
+    assert "OK Exposure: USB/local endpoint only" in rendered
     assert "OK Ollama: responding on /api/tags (1 model)" in rendered
     assert "OK IDE: Continue ready in cursor" in rendered
 
@@ -47,5 +48,21 @@ def test_status_report_marks_missing_pieces():
     assert not report.ok
     assert "Needs attention Phone: No ADB devices found" in rendered
     assert "Needs attention USB tunnel: adb reverse tcp:11434 is not active" in rendered
+    assert "OK Exposure: USB/local endpoint only" in rendered
     assert "Needs attention Ollama: Ollama did not return a response." in rendered
     assert "Needs attention IDE: Continue extension missing in cursor" in rendered
+
+
+def test_status_report_marks_non_localhost_endpoint_as_advanced_exposure():
+    report = build_status_report(
+        "List of devices attached\nABC123\tdevice\n",
+        "",
+        OllamaServerStatus(ok=True, model_names=("qwen2.5-coder:3b",)),
+        (),
+        adb_path="adb",
+        api_base="http://192.168.1.50:11434",
+    )
+
+    rendered = "\n".join(render_status_report(report))
+
+    assert "Unknown Exposure: advanced endpoint configured: http://192.168.1.50:11434" in rendered

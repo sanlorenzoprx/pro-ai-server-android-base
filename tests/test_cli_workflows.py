@@ -35,6 +35,30 @@ def test_setup_production_prints_state_machine_without_executing_actions():
     assert "Setup plan" not in result.output
 
 
+def test_setup_production_rejects_lan_without_advanced_exposure():
+    runner = CliRunner()
+
+    result = runner.invoke(cli.app, ["setup", "--production", "--mode", "lan", "--host", "192.168.1.50"])
+
+    assert result.exit_code == 1
+    assert "Production installer defaults to USB mode" in result.output
+    assert "--advanced-exposure" in result.output
+
+
+def test_setup_production_allows_lan_with_advanced_exposure():
+    runner = CliRunner()
+
+    result = runner.invoke(
+        cli.app,
+        ["setup", "--production", "--advanced-exposure", "--mode", "lan", "--host", "192.168.1.50"],
+    )
+
+    assert result.exit_code == 0
+    assert "Production installer plan" in result.output
+    assert "LAN mode exposes Ollama" in result.output
+    assert "Plan only" in result.output
+
+
 def test_setup_execute_refuses_continue_config_without_yes():
     runner = CliRunner()
 
@@ -1339,7 +1363,7 @@ def test_status_prints_concise_readiness_report(monkeypatch):
     monkeypatch.setattr(
         cli,
         "build_status_report",
-        lambda devices, reverse, ollama, ides, adb_path: ProAiStatus(
+        lambda devices, reverse, ollama, ides, adb_path, api_base="http://localhost:11434": ProAiStatus(
             items=(
                 StatusItem("Phone", True, "connected (ABC123)"),
                 StatusItem("Ollama", True, "responding on /api/tags (0 models)"),

@@ -46,6 +46,14 @@ def test_generates_deterministic_termux_scripts_for_usb_mode():
     assert "export OLLAMA_HOST=127.0.0.1:11434; ollama serve" in bundle.files[
         Path("generated/termux/start-pro-ai-server.sh")
     ]
+    assert "export OLLAMA_HOST=0.0.0.0:11434" not in bundle.files[Path("generated/termux/start-pro-ai-server.sh")]
+
+
+def test_usb_start_script_binds_phone_side_server_to_loopback_only():
+    script = generate_start_script("usb")
+
+    assert "export OLLAMA_HOST=127.0.0.1:11434; ollama serve" in script
+    assert "export OLLAMA_HOST=0.0.0.0:11434" not in script
 
 
 def test_bootstrap_and_debian_setup_include_real_ollama_install_path():

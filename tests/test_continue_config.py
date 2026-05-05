@@ -60,6 +60,14 @@ def test_api_base_for_usb_defaults_to_localhost():
     assert api_base_for_mode("usb") == "http://localhost:11434"
 
 
+def test_continue_config_usb_uses_localhost_for_all_model_roles():
+    plan = model_plan_for_profile("professional")
+
+    parsed = yaml.safe_load(render_continue_config_yaml(plan, mode="usb"))
+
+    assert {model["apiBase"] for model in parsed["models"]} == {"http://localhost:11434"}
+
+
 def test_lan_warning_is_pure_helper():
     assert exposure_warnings("lan") == ["LAN mode exposes Ollama to devices on the local network."]
     assert exposure_warnings("usb") == []
