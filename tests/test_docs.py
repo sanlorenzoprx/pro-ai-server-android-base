@@ -53,8 +53,12 @@ def test_cli_workflow_documents_windows_first_flow_and_safety_claims():
         "pro-ai-server status",
         "pro-ai-server tunnel",
         "pro-ai-server setup",
+        "pro-ai-server setup --production",
+        "pro-ai-server installer-ui",
         "pro-ai-server setup --execute --yes",
         "pro-ai-server diagnose --output",
+        "pro-ai-server test-prompt",
+        "scripts/smoke-production-installer.ps1",
     ):
         assert command in workflow
 
@@ -76,6 +80,9 @@ def test_cli_workflow_documents_windows_first_flow_and_safety_claims():
         "concise readiness view",
         "127.0.0.1:11434",
         "adb reverse tcp:11434 tcp:11434",
+        "advanced lan and tailscale modes are not shown in first-run ui",
+        "missing model, invalid json, empty output, or connection failures",
+        "-withphone",
     ):
         assert safety_claim in workflow
 
@@ -93,6 +100,10 @@ def test_troubleshooting_documents_phone_setup_and_mvp_failure_modes():
         "termux home is not initialized",
         "ollama not responding on localhost:11434",
         "missing models",
+        "test prompt failed",
+        "usb tunnel failure",
+        "pro-ai-server test-prompt",
+        "scripts/smoke-production-installer.ps1",
         "continue backup",
         "lan mode exposes ollama",
         "tailscale hostname",
@@ -123,10 +134,37 @@ def test_release_doc_documents_windows_first_release_gates_and_smoke_flow():
         "scripts/download-platform-tools.ps1",
         "android studio",
         "pro-ai-server generate-scripts",
-        "pro-ai-server setup",
+        "pro-ai-server setup --production",
+        "pro-ai-server installer-ui",
+        "scripts/smoke-production-installer.ps1",
+        "-withphone",
         "pro-ai-server diagnose --output",
+        "test prompt",
     ):
         assert expected in release
+
+
+def test_production_smoke_script_documents_no_phone_and_phone_paths():
+    smoke = read_doc("scripts/smoke-production-installer.ps1")
+
+    for expected in (
+        "param(",
+        "$withphone",
+        "ruff check",
+        "pytest",
+        "validate-release",
+        "setup --production",
+        "installer-ui",
+        "--mock-failure",
+        "diagnose --output diagnostics.txt",
+        "termux-check",
+        "push-scripts",
+        "tunnel",
+        "server-check",
+        "test-prompt",
+        "status",
+    ):
+        assert expected in smoke
 
 
 def test_ci_runs_release_validation_and_core_build_gates():

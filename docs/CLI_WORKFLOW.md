@@ -177,9 +177,10 @@ Plan mode is the default:
 
 ```powershell
 pro-ai-server setup
+pro-ai-server setup --production
 ```
 
-The plan prints the actions and safety notes without writing Continue config, pushing files, or creating the tunnel.
+The standard plan prints the MVP actions and safety notes. The production plan prints the stable installer state machine used by the packaged build and installer UI. Both plan modes avoid writing Continue config, pushing files, or creating the tunnel unless `--execute` is used.
 
 To execute the planned MVP actions:
 
@@ -192,12 +193,22 @@ pro-ai-server setup --execute --yes
 Useful variants:
 
 ```powershell
+pro-ai-server setup --production
 pro-ai-server setup --mode usb --push-scripts --execute --yes
 pro-ai-server setup --mode tailscale --host pro-ai-phone
 pro-ai-server setup --mode lan --host 192.168.1.50 --no-tunnel
 ```
 
-## 12. Check Live Status
+## 12. Preview Installer UI
+
+```powershell
+pro-ai-server installer-ui
+pro-ai-server installer-ui --mock-failure termux-readiness
+```
+
+The UI preview is a no-phone smoke path over the same production installer state machine. It shows the welcome checklist, device detection, hardware scan, install progress, test prompt, IDE configuration, success receipt, and recoverable error screens. Advanced LAN and Tailscale modes are not shown in first-run UI.
+
+## 13. Check Live Status
 
 ```powershell
 pro-ai-server status
@@ -211,7 +222,16 @@ Use a custom API base for LAN or Tailscale checks:
 pro-ai-server status --api-base http://pro-ai-phone:11434
 ```
 
-## 13. Capture Diagnostics
+## 14. Test Prompt
+
+```powershell
+pro-ai-server server-check
+pro-ai-server test-prompt
+```
+
+`server-check` verifies `/api/tags` and required model inventory. `test-prompt` sends a small non-streaming `/api/generate` prompt through the configured endpoint and reports missing model, invalid JSON, empty output, or connection failures.
+
+## 15. Capture Diagnostics
 
 ```powershell
 pro-ai-server diagnose
@@ -219,3 +239,13 @@ pro-ai-server diagnose --output diagnostics.txt
 ```
 
 Diagnostics include host details, ADB path, connected phone state, selected hardware facts, `adb reverse --list`, IDE CLI discovery, and a local Ollama tags check. Reports redact user-profile paths where possible.
+
+## 16. Production Smoke Script
+
+```powershell
+scripts/smoke-production-installer.ps1
+scripts/smoke-production-installer.ps1 -WithPhone
+scripts/smoke-production-installer.ps1 -WithPhone -Serial <device-serial>
+```
+
+The default smoke script runs no-phone validation: lint, tests, release checks, production setup plan, installer UI preview, mocked recoverable error, and diagnostics. `-WithPhone` adds scan, Termux readiness, script push, USB tunnel, Continue config, server-check, test-prompt, and status.

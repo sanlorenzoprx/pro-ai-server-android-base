@@ -90,8 +90,25 @@ After the required gates pass, run the smoke path that exercises script generati
 
 ```powershell
 pro-ai-server generate-scripts --mode usb
-pro-ai-server setup
+pro-ai-server setup --production
+pro-ai-server installer-ui
+pro-ai-server installer-ui --mock-failure termux-readiness
 pro-ai-server diagnose --output diagnostics.txt
 ```
 
-Use `setup` without `--execute` for release smoke checks so it prints the plan without writing Continue config, pushing files, or creating an ADB tunnel.
+Use `setup --production` without `--execute` for release smoke checks so it prints the production state machine without writing Continue config, pushing files, or creating an ADB tunnel.
+
+The scripted no-phone smoke path is:
+
+```powershell
+scripts/smoke-production-installer.ps1
+```
+
+For hardware smoke with a connected Android phone:
+
+```powershell
+scripts/smoke-production-installer.ps1 -WithPhone
+scripts/smoke-production-installer.ps1 -WithPhone -Serial <device-serial>
+```
+
+Hardware smoke covers fresh install, repeat install, Termux readiness, USB tunnel creation, Continue config, model inventory, test prompt, status, and diagnostics. Record the phone model, Android version, RAM profile, selected models, and any manual Termux/Ollama steps in the Phase 20 closeout report.

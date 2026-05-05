@@ -46,6 +46,17 @@ If Termux is missing, install Termux from F-Droid or GitHub, then open it once. 
 
 Termux:Widget manual placement is still required. Install Termux:Widget, confirm the generated `Start Pro AI Server` shortcut is in `~/.shortcuts`, then add the widget or shortcut from the Android home screen.
 
+### Production installer stops at Termux readiness
+
+Run:
+
+```powershell
+pro-ai-server installer-ui --mock-failure termux-readiness
+pro-ai-server termux-check
+```
+
+Install Termux and Termux:API from the same trusted source. Open Termux once before rerunning setup so the Termux home directory exists.
+
 ## Ollama and Models
 
 ### Ollama not responding on localhost:11434
@@ -69,6 +80,30 @@ Run the generated model installer inside Termux:
 ```
 
 If Continue reports missing models, compare the model names in `%USERPROFILE%\.continue\config.yaml` with `ollama list` inside Termux. Re-run `pro-ai-server generate-scripts --mode usb` if you changed the profile or model plan.
+
+### Test prompt failed
+
+Run:
+
+```powershell
+pro-ai-server server-check
+pro-ai-server test-prompt
+pro-ai-server status
+```
+
+If `test-prompt` reports a missing model, run `~/install-models.sh` in Termux. If it reports connection refused, confirm `~/start-pro-ai-server.sh` is running and recreate the USB tunnel with `pro-ai-server tunnel`.
+
+### USB tunnel failure
+
+Run:
+
+```powershell
+adb reverse --list
+pro-ai-server tunnel
+pro-ai-server status
+```
+
+If the tunnel is missing after reconnecting the phone, rerun `pro-ai-server tunnel --serial <device-serial>`. Keep the USB cable connected while using Continue in USB mode.
 
 ## Continue Configuration
 
@@ -106,3 +141,11 @@ pro-ai-server validate-release
 ```
 
 `validate-release` checks bundled ADB runtime files, package data for embedded tools, and CI gates. Use `pro-ai-server validate-platform-tools` for a narrower bundled ADB validation when troubleshooting host ADB problems.
+
+For production installer smoke checks, run:
+
+```powershell
+scripts/smoke-production-installer.ps1
+```
+
+Use `-WithPhone` only when a USB-connected, authorized Android phone is available.
