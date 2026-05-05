@@ -75,6 +75,32 @@ def test_build_device_profile_from_scan_outputs_uses_existing_hardware_assessmen
     assert profile.warnings == ("Free storage is under 8 GB; warn before downloading models.",)
 
 
+def test_build_device_profile_from_scan_outputs_accepts_android_storage_mount_alias():
+    profile = build_device_profile_from_scan_outputs(
+        "ZY22GKMWPN",
+        DeviceScanOutputs(
+            meminfo="MemTotal: 5806680 kB",
+            storage=(
+                "Filesystem       1K-blocks      Used Available Use% Mounted on\n"
+                "/dev/block/dm-39 239515616 107400484 131641520  45% /storage/emulated/0/Android/obb"
+            ),
+            abi="arm64-v8a\n",
+            android_version="13\n",
+            manufacturer="motorola\n",
+            model="moto g 5G (2022)\n",
+            battery="level: 55\ntemperature: 300\nplugged: 1\nstatus: 2",
+        ),
+    )
+
+    assert profile.serial == "ZY22GKMWPN"
+    assert profile.model == "moto g 5G (2022)"
+    assert profile.android_version == "13"
+    assert profile.ram_gb == 5806680 / 1024 / 1024
+    assert profile.free_storage_gb == 131641520 / 1024 / 1024
+    assert profile.recommended_profile is not None
+    assert profile.recommended_profile.name == "professional"
+
+
 def test_build_device_scan_summary_lines_include_model_recommendation_and_warnings():
     profile = build_device_profile_from_scan_outputs(
         "ABC123",

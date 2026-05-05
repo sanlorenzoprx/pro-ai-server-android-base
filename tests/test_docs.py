@@ -298,6 +298,7 @@ def test_production_rc_doc_documents_hardware_packaged_exe_and_go_no_go():
         "pro-ai-server setup --execute --yes",
         "pro-ai-server tunnel",
         "pro-ai-server test-prompt",
+        "pro-ai-server server-check",
         "pro-ai-server devstack-ide-status",
         "pro-ai-server configure-devstack",
         "hardware smoke matrix",
@@ -343,6 +344,9 @@ def test_production_rc_doc_documents_hardware_smoke_matrix_fields():
         "remote desktop",
         "usb device redirection",
         "oem android usb driver",
+        "moto g 5g hardware smoke attempt",
+        "termux and termux:api",
+        "ollama endpoint",
     ):
         assert expected in rc
 

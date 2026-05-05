@@ -57,12 +57,22 @@ def parse_meminfo_ram_gb(meminfo: str) -> float:
 
 
 def parse_data_free_storage_gb(df_output: str) -> float:
+    fallback_available_kb: int | None = None
+    data_rows = 0
     for line in df_output.splitlines():
         parts = line.split()
         if not parts or parts[0].lower() == "filesystem":
             continue
+        data_rows += 1
         if parts[-1] == "/data" and len(parts) >= 4:
             return int(parts[3]) / 1024 / 1024
+        if len(parts) >= 6:
+            try:
+                fallback_available_kb = int(parts[3])
+            except ValueError:
+                pass
+    if data_rows == 1 and fallback_available_kb is not None:
+        return fallback_available_kb / 1024 / 1024
     raise ValueError("/data row not found in df output.")
 
 

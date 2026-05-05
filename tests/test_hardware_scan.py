@@ -25,6 +25,15 @@ Filesystem     1K-blocks     Used Available Use% Mounted on
     assert parse_data_free_storage_gb(df_output) == 105223552 / 1024 / 1024
 
 
+def test_parse_data_free_storage_gb_accepts_single_row_android_storage_mount():
+    df_output = """
+Filesystem       1K-blocks      Used Available Use% Mounted on
+/dev/block/dm-39 239515616 107400484 131641520  45% /storage/emulated/0/Android/obb
+"""
+
+    assert parse_data_free_storage_gb(df_output) == 131641520 / 1024 / 1024
+
+
 def test_parse_battery_dump_reads_level_temperature_and_charging():
     dumpsys_battery = """
 Current Battery Service state:
