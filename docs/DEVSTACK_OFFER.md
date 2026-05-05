@@ -112,3 +112,15 @@ Every launch video, creator post, or sales-call recording should show the same p
 - CTA: the customer is pointed to trial entry, starter install, or pro install.
 
 Keep the offer message aligned with the launch copy: private AI coding assistant, local-first over USB, and no monthly AI model bill for supported local workflows. Always include the hardware qualifier when showing a low-RAM phone or a slow response.
+
+## Launch Tracking
+
+Use `docs/DEVSTACK_TRACKING.md` before creator, affiliate, partner, or paid traffic starts.
+
+Offer links should use the same launch offer tags as this document:
+
+- `trial_entry`
+- `starter_install`
+- `pro_install`
+
+Message tags should match the actual proof asset or landing-page angle, such as `private_coding_assistant`, `no_monthly_model_bill`, `usb_first_local`, or `cursor_vscode_continue`.

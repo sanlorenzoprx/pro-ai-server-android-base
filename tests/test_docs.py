@@ -234,6 +234,53 @@ def test_devstack_capture_checklist_documents_video_and_sales_beats():
         assert expected in offer
 
 
+def test_devstack_tracking_plan_documents_params_events_and_examples():
+    tracking = read_doc("docs/DEVSTACK_TRACKING.md")
+    offer = read_doc("docs/DEVSTACK_OFFER.md")
+
+    for expected in (
+        "`ref`",
+        "`partner_type`",
+        "`offer`",
+        "`msg`",
+        "`channel`",
+        "`niche`",
+        "`campaign`",
+        "trial_entry",
+        "starter_install",
+        "pro_install",
+        "private_coding_assistant",
+        "no_monthly_model_bill",
+        "usb_first_local",
+        "cursor_vscode_continue",
+        "landing_page_viewed",
+        "cta_clicked",
+        "lead_captured",
+        "trial_started",
+        "install_started",
+        "install_completed",
+        "demo_requested",
+        "purchase_completed",
+        "required properties",
+        "example links",
+        "measure before scaling",
+        "refund or failed-install rate",
+    ):
+        assert expected in tracking
+
+    for expected in (
+        "docs/devstack_tracking.md",
+        "trial_entry",
+        "starter_install",
+        "pro_install",
+        "private_coding_assistant",
+        "no_monthly_model_bill",
+        "usb_first_local",
+        "cursor_vscode_continue",
+    ):
+        assert expected in offer
+
+
 def test_production_smoke_script_documents_no_phone_and_phone_paths():
     smoke = read_doc("scripts/smoke-production-installer.ps1")
 
