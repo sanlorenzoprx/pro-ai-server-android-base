@@ -124,6 +124,7 @@ console = Console()
 
 TERMUX_FDROID_URL = "https://f-droid.org/packages/com.termux/"
 TERMUX_API_FDROID_URL = "https://f-droid.org/packages/com.termux.api/"
+FDROID_PACKAGE = "org.fdroid.fdroid"
 
 
 @dataclass
@@ -527,6 +528,7 @@ def install_termux_apps(
     try:
         selected_serial = select_device_serial(adb, serial)
         console.print(f"Device: {selected_serial}")
+        _open_fdroid_unknown_app_permission(adb, selected_serial)
 
         _install_or_open_termux_app(
             adb=adb,
@@ -556,6 +558,30 @@ def install_termux_apps(
 
     console.print("After installing, open Termux once so its home directory initializes.")
     console.print(f"Then run: pro-ai-server termux-check --serial {selected_serial}")
+
+
+def _open_fdroid_unknown_app_permission(adb: str, serial: str) -> None:
+    fdroid_output = run_optional_command(adb_command(adb, ["shell", "pm", "path", FDROID_PACKAGE], serial))
+    if not parse_pm_path_installed(fdroid_output):
+        console.print("[yellow]F-Droid is not installed; skipping F-Droid unknown-app permission screen.[/yellow]")
+        return
+
+    run_command(
+        adb_command(
+            adb,
+            [
+                "shell",
+                "am",
+                "start",
+                "-a",
+                "android.settings.MANAGE_UNKNOWN_APP_SOURCES",
+                "-d",
+                f"package:{FDROID_PACKAGE}",
+            ],
+            serial,
+        )
+    )
+    console.print("[yellow]Opened[/yellow] F-Droid Install unknown apps permission screen.")
 
 
 def _install_or_open_termux_app(

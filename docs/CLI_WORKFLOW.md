@@ -74,6 +74,8 @@ If Termux or Termux:API is missing, open their F-Droid install pages on the conn
 pro-ai-server install-termux-apps --serial <device-serial>
 ```
 
+When F-Droid is installed, this also opens Android's F-Droid "Install unknown apps" permission screen. Allow F-Droid there so Android permits Termux and Termux:API installs.
+
 For fully scripted installs with locally reviewed APK files:
 
 ```powershell

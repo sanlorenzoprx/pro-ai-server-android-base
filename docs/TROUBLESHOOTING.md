@@ -50,6 +50,8 @@ Use the installer helper to open the trusted F-Droid package pages on the connec
 pro-ai-server install-termux-apps --serial <device-serial>
 ```
 
+If Android blocks F-Droid as an unpublished or unknown app source, allow F-Droid from the "Install unknown apps" screen opened by the helper command.
+
 For a fully scripted path with local APKs that you already reviewed:
 
 ```powershell

@@ -18,7 +18,8 @@ Blocked on phone-side Termux/Ollama readiness.
 - Recorded the Moto g 5G (2022) hardware smoke attempt.
 - Confirmed ADB detection, hardware scan, production setup planning, USB tunnel, and IDE readiness.
 - Added `pro-ai-server install-termux-apps` so Termux and Termux:API installation is guided by the product instead of loose manual steps.
-- Ran `install-termux-apps` against the Moto device and opened both F-Droid package pages.
+- Updated `install-termux-apps` to open F-Droid's Android "Install unknown apps" permission screen before opening Termux package pages.
+- Ran `install-termux-apps` against the Moto device and opened the F-Droid permission screen plus both package pages.
 - Confirmed the remaining blocker is phone-side Termux/Ollama readiness.
 
 ## Files Changed
@@ -43,7 +44,7 @@ Blocked on phone-side Termux/Ollama readiness.
 - `.\\.venv\\Scripts\\pro-ai-server.exe validate-release`
   - Passed
 - `.\\.venv\\Scripts\\python.exe -m pytest`
-  - 394 passed
+  - 395 passed
 
 ## Hardware Evidence
 
@@ -58,7 +59,7 @@ Blocked on phone-side Termux/Ollama readiness.
 - `.\\.venv\\Scripts\\pro-ai-server.exe termux-check --serial ZY22GKMWPN`
   - Blocked: Termux missing, Termux:API missing, Termux home not initialized.
 - `.\\.venv\\Scripts\\pro-ai-server.exe install-termux-apps --serial ZY22GKMWPN`
-  - Completed: opened Termux and Termux:API F-Droid package pages on the phone.
+  - Completed: opened F-Droid "Install unknown apps" permission screen, then opened Termux and Termux:API F-Droid package pages on the phone.
 - `.\\.venv\\Scripts\\pro-ai-server.exe push-scripts --serial ZY22GKMWPN`
   - Blocked: `/data/data/com.termux` permission denied.
 - `.\\.venv\\Scripts\\pro-ai-server.exe tunnel --serial ZY22GKMWPN`

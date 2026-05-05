@@ -80,6 +80,7 @@ def test_cli_workflow_documents_windows_first_flow_and_safety_claims():
         "--android-apk",
         "--termux-apk",
         "--termux-api-apk",
+        "install unknown apps",
         "concise readiness view",
         "127.0.0.1:11434",
         "adb reverse tcp:11434 tcp:11434",
@@ -101,6 +102,7 @@ def test_troubleshooting_documents_phone_setup_and_mvp_failure_modes():
         "pro-ai-server install-termux-apps",
         "termux is missing",
         "termux:api is missing",
+        "install unknown apps",
         "termux home is not initialized",
         "ollama not responding on localhost:11434",
         "missing models",
@@ -352,6 +354,7 @@ def test_production_rc_doc_documents_hardware_smoke_matrix_fields():
         "moto g 5g hardware smoke attempt",
         "termux and termux:api",
         "install-termux-apps",
+        "install unknown apps",
         "ollama endpoint",
     ):
         assert expected in rc

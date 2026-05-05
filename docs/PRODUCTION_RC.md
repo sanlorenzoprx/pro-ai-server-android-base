@@ -172,7 +172,7 @@ Blocked:
 
 Release impact: blocks full hardware smoke until Termux, Termux:API, Ollama, and selected models are installed on the phone.
 
-Automation note: use `pro-ai-server install-termux-apps --serial ZY22GKMWPN` to open the required F-Droid package pages, or provide reviewed local APKs with `--termux-apk`, `--termux-api-apk`, and `--yes` for an ADB install path.
+Automation note: use `pro-ai-server install-termux-apps --serial ZY22GKMWPN` to open the F-Droid "Install unknown apps" permission screen plus the required Termux package pages, or provide reviewed local APKs with `--termux-apk`, `--termux-api-apk`, and `--yes` for an ADB install path.
 
 ## Packaged Exe Evidence
 
