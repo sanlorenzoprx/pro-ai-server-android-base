@@ -281,6 +281,35 @@ def test_devstack_tracking_plan_documents_params_events_and_examples():
         assert expected in offer
 
 
+def test_production_rc_doc_documents_hardware_packaged_exe_and_go_no_go():
+    rc = read_doc("docs/PRODUCTION_RC.md")
+
+    for expected in (
+        "phase 22",
+        "production release candidate",
+        "windows first",
+        "usb-first android phone",
+        "http://localhost:11434",
+        "vs code or cursor",
+        "continue",
+        "scripts/build-windows-exe.ps1",
+        "dist\\pro-ai-server\\pro-ai-server.exe validate-release",
+        "scripts/smoke-production-installer.ps1 -withphone",
+        "pro-ai-server setup --execute --yes",
+        "pro-ai-server tunnel",
+        "pro-ai-server test-prompt",
+        "pro-ai-server devstack-ide-status",
+        "pro-ai-server configure-devstack",
+        "hardware smoke matrix",
+        "packaged exe evidence",
+        "live ide evidence",
+        "release evidence bundle",
+        "go-with-limitations",
+        "no-go",
+    ):
+        assert expected in rc
+
+
 def test_production_smoke_script_documents_no_phone_and_phone_paths():
     smoke = read_doc("scripts/smoke-production-installer.ps1")
 
