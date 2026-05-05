@@ -2,6 +2,7 @@ from pathlib import Path
 
 from pro_ai_server.continue_config import ContinueConfigWriteResult
 from pro_ai_server.models import model_plan_for_profile
+from pro_ai_server.ollama import OllamaTestPromptStatus
 from pro_ai_server.script_delivery import build_script_delivery_plan
 from pro_ai_server.setup_receipt import SetupReceipt, build_setup_receipt, render_setup_receipt
 from pro_ai_server.setup_workflow import mark_production_step_failed, plan_production_installer, plan_setup_workflow
@@ -153,3 +154,20 @@ def test_receipt_can_include_production_installer_steps():
     assert "- adb-verification: failure - ADB verification\n" in rendered
     assert "Recovery: Reconnect the phone" in rendered
     assert "Debug: adb shell getprop returned exit code 1" in rendered
+
+
+def test_receipt_can_include_test_prompt_result():
+    receipt = build_setup_receipt(
+        workflow_plan=plan_setup_workflow(),
+        test_prompt_status=OllamaTestPromptStatus(
+            ok=True,
+            model="qwen2.5-coder:3b",
+            response="pro-ai-server-ready",
+        ),
+    )
+
+    rendered = render_setup_receipt(receipt)
+
+    assert receipt.test_prompt_ok is True
+    assert receipt.test_prompt_response == "pro-ai-server-ready"
+    assert "Test prompt\n- Result: pass\n- Response: pro-ai-server-ready\n" in rendered

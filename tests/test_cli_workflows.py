@@ -225,6 +225,52 @@ def test_server_check_accepts_custom_api_base(monkeypatch):
     assert "Ollama API: http://pro-ai-phone:11434" in result.output
 
 
+def test_test_prompt_succeeds_with_profile_chat_model(monkeypatch):
+    runner = CliRunner()
+
+    def fake_run(command, capture_output, text):
+        import subprocess
+
+        assert command == [
+            "curl",
+            "--silent",
+            "--show-error",
+            "-X",
+            "POST",
+            "-H",
+            "Content-Type: application/json",
+            "-d",
+            '{"model":"qwen2.5-coder:3b","prompt":"Reply with exactly: pro-ai-server-ready","stream":false}',
+            "http://localhost:11434/api/generate",
+        ]
+        return subprocess.CompletedProcess(command, 0, stdout='{"response":"pro-ai-server-ready"}', stderr="")
+
+    monkeypatch.setattr(cli.subprocess, "run", fake_run)
+
+    result = runner.invoke(cli.app, ["test-prompt", "--profile", "professional"])
+
+    assert result.exit_code == 0
+    assert "Test prompt succeeded" in result.output
+    assert "pro-ai-server-ready" in result.output
+
+
+def test_test_prompt_reports_missing_model(monkeypatch):
+    runner = CliRunner()
+
+    def fake_run(command, capture_output, text):
+        import subprocess
+
+        return subprocess.CompletedProcess(command, 0, stdout='{"error":"model test-model not found"}', stderr="")
+
+    monkeypatch.setattr(cli.subprocess, "run", fake_run)
+
+    result = runner.invoke(cli.app, ["test-prompt", "--model", "test-model"])
+
+    assert result.exit_code == 1
+    assert "could not run model test-model" in result.output
+    assert "ollama pull test-model" in result.output
+
+
 def test_gateway_start_calls_server_with_configurable_models(monkeypatch):
     runner = CliRunner()
     captured = {}

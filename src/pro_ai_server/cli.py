@@ -84,7 +84,14 @@ from pro_ai_server.ide import detect_continue_extension_status
 from pro_ai_server.ide import install_continue_extension
 from pro_ai_server.ide import installed_ide_clis
 from pro_ai_server.models import model_plan_for_profile, model_plan_for_ram
-from pro_ai_server.ollama import assess_model_inventory, assess_ollama_server_status, build_ollama_tags_command
+from pro_ai_server.ollama import (
+    DEFAULT_TEST_PROMPT,
+    assess_model_inventory,
+    assess_ollama_server_status,
+    assess_ollama_test_prompt_response,
+    build_ollama_generate_command,
+    build_ollama_tags_command,
+)
 from pro_ai_server.packaging import validate_windows_platform_tools_layouts
 from pro_ai_server.rag.context import build_context
 from pro_ai_server.rag.indexer import DEFAULT_INDEX_PATH, index_project
@@ -471,6 +478,35 @@ def server_check(
         console.print(f"Next: {instruction}")
     if not inventory.ok:
         raise typer.Exit(code=1)
+
+
+@app.command("test-prompt")
+def test_prompt(
+    api_base: str = typer.Option("http://localhost:11434", help="Ollama API base URL."),
+    profile_name: str = typer.Option("professional", "--profile", help="Model profile whose chat model should be tested."),
+    ram_gb: float | None = typer.Option(None, help="Optional RAM value used to select a profile."),
+    model: str | None = typer.Option(None, help="Optional explicit model to test instead of the profile chat model."),
+    prompt: str = typer.Option(DEFAULT_TEST_PROMPT, help="Small prompt to send to /api/generate."),
+) -> None:
+    """Send a small Ollama /api/generate prompt through the configured endpoint."""
+    plan = model_plan_for_ram(ram_gb) if ram_gb is not None else model_plan_for_profile(profile_name)
+    selected_model = model or plan.chat_model
+    command = build_ollama_generate_command(selected_model, prompt=prompt, api_base_url=api_base)
+    generate_output = run_optional_command(list(command))
+    status = assess_ollama_test_prompt_response(selected_model, generate_output)
+
+    console.print(f"Ollama API: {api_base.rstrip('/')}")
+    console.print(f"Test model: {selected_model}")
+    if status.ok:
+        console.print("[green]Test prompt succeeded.[/green]")
+        console.print(f"Response: {status.response}")
+        return
+
+    for warning in status.warnings:
+        console.print(f"[yellow]Warning:[/yellow] {warning}")
+    for instruction in status.instructions:
+        console.print(f"Next: {instruction}")
+    raise typer.Exit(code=1)
 
 
 @app.command("gateway-start")

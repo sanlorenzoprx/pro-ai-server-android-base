@@ -6,6 +6,7 @@ from typing import Iterable
 
 from pro_ai_server.continue_config import ContinueConfigWriteResult
 from pro_ai_server.models import ModelPlan
+from pro_ai_server.ollama import OllamaTestPromptStatus
 from pro_ai_server.script_delivery import ScriptDeliveryPlan
 from pro_ai_server.setup_workflow import ProductionInstallerPlan, ProductionInstallerStep, SetupWorkflowPlan
 from pro_ai_server.termux_scripts import TermuxScriptBundle
@@ -34,6 +35,8 @@ class SetupReceipt:
     artifacts: tuple[SetupReceiptItem, ...] = ()
     next_steps: tuple[SetupReceiptItem, ...] = ()
     installer_steps: tuple[ProductionInstallerStep, ...] = ()
+    test_prompt_ok: bool | None = None
+    test_prompt_response: str | None = None
 
 
 def build_setup_receipt(
@@ -51,6 +54,7 @@ def build_setup_receipt(
     warnings: Iterable[str] = (),
     notes: Iterable[str] = (),
     production_plan: ProductionInstallerPlan | None = None,
+    test_prompt_status: OllamaTestPromptStatus | None = None,
 ) -> SetupReceipt:
     """Build a pure execution receipt from already-created plan/result objects."""
 
@@ -92,6 +96,8 @@ def build_setup_receipt(
         artifacts=artifacts,
         next_steps=next_steps,
         installer_steps=production_plan.steps if production_plan else (),
+        test_prompt_ok=test_prompt_status.ok if test_prompt_status else None,
+        test_prompt_response=test_prompt_status.response if test_prompt_status else None,
     )
 
 
@@ -117,6 +123,11 @@ def render_setup_receipt(receipt: SetupReceipt) -> str:
         lines.append("- none")
     lines.extend(["", "Next steps"])
     lines.extend(_render_items(receipt.next_steps))
+    if receipt.test_prompt_ok is not None:
+        lines.extend(["", "Test prompt"])
+        lines.append(f"- Result: {_pass_fail(receipt.test_prompt_ok)}")
+        if receipt.test_prompt_response:
+            lines.append(f"- Response: {receipt.test_prompt_response}")
     if receipt.installer_steps:
         lines.extend(["", "Production installer steps"])
         lines.extend(_render_installer_steps(receipt.installer_steps))
@@ -217,3 +228,7 @@ def _value(value: str | None) -> str:
 
 def _yes_no(value: bool) -> str:
     return "yes" if value else "no"
+
+
+def _pass_fail(value: bool) -> str:
+    return "pass" if value else "fail"

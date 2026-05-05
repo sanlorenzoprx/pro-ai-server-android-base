@@ -1,7 +1,10 @@
 from pro_ai_server.models import ModelPlan, model_plan_for_profile
 from pro_ai_server.ollama import (
+    DEFAULT_TEST_PROMPT,
     assess_model_inventory,
     assess_ollama_server_status,
+    assess_ollama_test_prompt_response,
+    build_ollama_generate_command,
     build_ollama_tags_command,
     build_ollama_tags_commands,
     parse_ollama_tags_model_names,
@@ -103,3 +106,66 @@ def test_api_base_url_command_building():
         "http://phone.local:11434/api/tags",
     )
     assert build_ollama_tags_commands("http://phone.local:11434/") == (command,)
+
+
+def test_generate_command_uses_small_non_streaming_payload():
+    command = build_ollama_generate_command("qwen2.5-coder:3b", api_base_url="http://phone.local:11434/")
+
+    assert command == (
+        "curl",
+        "--silent",
+        "--show-error",
+        "-X",
+        "POST",
+        "-H",
+        "Content-Type: application/json",
+        "-d",
+        '{"model":"qwen2.5-coder:3b","prompt":"Reply with exactly: pro-ai-server-ready","stream":false}',
+        "http://phone.local:11434/api/generate",
+    )
+    assert DEFAULT_TEST_PROMPT in command[-2]
+
+
+def test_test_prompt_accepts_non_empty_generate_response():
+    status = assess_ollama_test_prompt_response(
+        "qwen2.5-coder:3b",
+        '{"model":"qwen2.5-coder:3b","response":"pro-ai-server-ready","done":true}',
+    )
+
+    assert status.ok is True
+    assert status.model == "qwen2.5-coder:3b"
+    assert status.response == "pro-ai-server-ready"
+    assert status.warnings == ()
+
+
+def test_test_prompt_reports_connection_failure():
+    status = assess_ollama_test_prompt_response("qwen2.5-coder:3b", "Failed to connect to localhost")
+
+    assert status.ok is False
+    assert "Failed to connect" in status.warnings[0]
+    assert "Start Ollama in Termux" in status.instructions[0]
+
+
+def test_test_prompt_reports_invalid_json():
+    status = assess_ollama_test_prompt_response("qwen2.5-coder:3b", "not json")
+
+    assert status.ok is False
+    assert "invalid JSON" in status.warnings[0]
+
+
+def test_test_prompt_reports_missing_model_with_pull_instruction():
+    status = assess_ollama_test_prompt_response(
+        "qwen2.5-coder:3b",
+        '{"error":"model qwen2.5-coder:3b not found, try pulling it first"}',
+    )
+
+    assert status.ok is False
+    assert "could not run model qwen2.5-coder:3b" in status.warnings[0]
+    assert status.instructions == ("Run in Termux: ollama pull qwen2.5-coder:3b",)
+
+
+def test_test_prompt_reports_empty_generated_text():
+    status = assess_ollama_test_prompt_response("qwen2.5-coder:3b", '{"response":"   "}')
+
+    assert status.ok is False
+    assert "generated text" in status.warnings[0]
