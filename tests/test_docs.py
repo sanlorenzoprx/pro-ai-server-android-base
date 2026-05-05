@@ -171,6 +171,34 @@ def test_devstack_demo_documents_launch_script_and_smoke_path():
     assert "no monthly ai model bill" in workflows
 
 
+def test_devstack_offer_documents_launch_packages_and_boundaries():
+    offer = read_doc("docs/DEVSTACK_OFFER.md")
+
+    for expected in (
+        "private ai coding assistant",
+        "cursor or vs code",
+        "continue",
+        "local-first",
+        "usb-first",
+        "no monthly ai model bill",
+        "low-ram",
+        "trial entry",
+        "free trial or `$1`",
+        "starter install",
+        "`$49-$99`",
+        "pro install",
+        "`$149-$199`",
+        "target customer",
+        "includes:",
+        "exclusions:",
+        "refund",
+        "support boundary",
+        "no guarantee",
+        "cloud-model speed",
+    ):
+        assert expected in offer
+
+
 def test_production_smoke_script_documents_no_phone_and_phone_paths():
     smoke = read_doc("scripts/smoke-production-installer.ps1")
 
