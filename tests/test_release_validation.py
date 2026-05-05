@@ -22,6 +22,9 @@ def test_release_validation_reports_missing_package_data_entry(tmp_path):
     write_valid_repo_tree(tmp_path)
     (tmp_path / "pyproject.toml").write_text(
         """
+[project.optional-dependencies]
+dev = ["pytest", "ruff", "pyinstaller"]
+
 [tool.setuptools.package-data]
 pro_ai_server = ["py.typed"]
 """.strip(),
@@ -104,11 +107,18 @@ def write_valid_repo_tree(root: Path) -> None:
 
     (root / "pyproject.toml").write_text(
         """
+[project.optional-dependencies]
+dev = ["pytest", "ruff", "pyinstaller"]
+
 [tool.setuptools.package-data]
 pro_ai_server = ["embedded-tools/**"]
 """.strip(),
         encoding="utf-8",
     )
+
+    scripts_dir = root / "scripts"
+    scripts_dir.mkdir()
+    (scripts_dir / "build-windows-exe.ps1").write_text("build", encoding="utf-8")
 
     ci_path = root / ".github" / "workflows" / "ci.yml"
     ci_path.parent.mkdir(parents=True)

@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from pro_ai_server.packaging import validate_windows_platform_tools_layouts
+from pro_ai_server.packaging import validate_windows_executable_packaging, validate_windows_platform_tools_layouts
 
 
 PYPROJECT_PATH = Path("pyproject.toml")
@@ -104,6 +104,24 @@ def validate_release_layout(repo_root: str | Path) -> ReleaseValidationResult:
             ReleaseValidationIssue(
                 code="missing-embedded-tools-package-data",
                 message=f"{PYPROJECT_PATH} must include package data for {PACKAGE_DATA_PATTERN}.",
+                path=pyproject_path,
+            )
+        )
+
+    packaging_validation = validate_windows_executable_packaging(root)
+    if not packaging_validation.build_script_exists:
+        issues.append(
+            ReleaseValidationIssue(
+                code="missing-windows-exe-build-script",
+                message=f"Missing Windows executable build script at {packaging_validation.plan.build_script}.",
+                path=root / packaging_validation.plan.build_script,
+            )
+        )
+    if not packaging_validation.pyproject_has_pyinstaller:
+        issues.append(
+            ReleaseValidationIssue(
+                code="missing-pyinstaller-dev-dependency",
+                message="pyproject.toml dev dependencies must include pyinstaller for Windows executable builds.",
                 path=pyproject_path,
             )
         )

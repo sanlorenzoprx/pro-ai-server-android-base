@@ -2,6 +2,10 @@ from pro_ai_server.packaging import (
     PACKAGED_WINDOWS_PLATFORM_TOOLS,
     REQUIRED_WINDOWS_PLATFORM_TOOL_FILES,
     SOURCE_TREE_WINDOWS_PLATFORM_TOOLS,
+    WINDOWS_EXE_BUILD_SCRIPT,
+    WINDOWS_EXE_DIST_PATH,
+    build_windows_executable_packaging_plan,
+    validate_windows_executable_packaging,
     validate_windows_platform_tools_dir,
     validate_windows_platform_tools_layouts,
 )
@@ -71,3 +75,49 @@ def test_windows_platform_tools_layout_validation_message_when_both_layouts_are_
 
     assert result.ok is True
     assert "both layouts" in result.message
+
+
+def test_windows_executable_packaging_plan_defines_build_and_smoke_commands():
+    plan = build_windows_executable_packaging_plan()
+
+    assert plan.build_script == WINDOWS_EXE_BUILD_SCRIPT
+    assert plan.exe_path == WINDOWS_EXE_DIST_PATH
+    assert "pyinstaller" in plan.pyinstaller_command
+    assert "--collect-data" in plan.pyinstaller_command
+    assert "pro_ai_server" in plan.pyinstaller_command
+    assert "--exclude-module" in plan.pyinstaller_command
+    assert (WINDOWS_EXE_DIST_PATH.as_posix(), "setup", "--production") in plan.smoke_commands
+    assert (WINDOWS_EXE_DIST_PATH.as_posix(), "validate-platform-tools") in plan.smoke_commands
+
+
+def test_windows_executable_packaging_validation_checks_script_and_dependency(tmp_path):
+    (tmp_path / "scripts").mkdir()
+    (tmp_path / WINDOWS_EXE_BUILD_SCRIPT).write_text("build", encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        """
+[project.optional-dependencies]
+dev = ["pytest", "pyinstaller"]
+""".strip(),
+        encoding="utf-8",
+    )
+
+    result = validate_windows_executable_packaging(tmp_path)
+
+    assert result.ok is True
+    assert result.missing == ()
+
+
+def test_windows_executable_packaging_validation_reports_missing_inputs(tmp_path):
+    (tmp_path / "pyproject.toml").write_text(
+        """
+[project.optional-dependencies]
+dev = ["pytest"]
+""".strip(),
+        encoding="utf-8",
+    )
+
+    result = validate_windows_executable_packaging(tmp_path)
+
+    assert result.ok is False
+    assert str(WINDOWS_EXE_BUILD_SCRIPT) in result.missing
+    assert "pyinstaller dev dependency" in result.missing

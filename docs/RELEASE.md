@@ -28,6 +28,34 @@ python -m pip wheel . --no-deps --wheel-dir dist
 
 The wheel command uses pip and the existing `pyproject.toml` build backend, so it does not add a new release dependency.
 
+## Windows Executable Build
+
+Build the customer-facing Windows executable from PowerShell:
+
+```powershell
+scripts/build-windows-exe.ps1
+```
+
+The script installs the project with dev dependencies, runs lint and tests, validates release readiness, then builds the executable with PyInstaller.
+
+Expected artifact:
+
+```powershell
+dist\pro-ai-server\pro-ai-server.exe
+```
+
+The packaging script includes the bundled ADB runtime data and excludes development-only modules such as `pytest` and `ruff`. It also avoids packaging local caches, virtualenvs, `.env` files, and build output directories.
+
+After building, the script smokes these packaged commands:
+
+```powershell
+dist\pro-ai-server\pro-ai-server.exe validate-platform-tools --root .
+dist\pro-ai-server\pro-ai-server.exe doctor
+dist\pro-ai-server\pro-ai-server.exe setup --production
+dist\pro-ai-server\pro-ai-server.exe status
+dist\pro-ai-server\pro-ai-server.exe diagnose --output diagnostics.txt
+```
+
 ## Bundled Platform Tools
 
 Release builds include these Windows ADB files:
