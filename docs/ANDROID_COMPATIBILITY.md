@@ -20,6 +20,8 @@ pro-ai-server android-compatibility --serial <device-serial>
 
 The command reports Android compatibility tier, supported status, model tier, Termux installer source, Termux:API installer source, warnings, and blockers.
 
+`setup --production` uses this compatibility model tier by default when no explicit `--profile` or `--ram-gb` override is provided. A yellow device therefore uses the lightweight production profile even when the raw hardware scan can recommend a more aggressive RAM-based profile.
+
 ## Trust Lane Rules
 
 - F-Droid, Termux, and Termux:API should come from the same trusted lane.

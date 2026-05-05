@@ -19,6 +19,7 @@ Move Pro AI Server and Pro Agentic Coding Server from build-ready to release-can
 | TKT-P22-001 | Production hardware smoke matrix | Phase 20 installer, Phase 21 DevStack docs |
 | TKT-P22-001B | Automated F-Droid and Termux bootstrap install path | TKT-P22-001 |
 | TKT-P22-001D | Android compatibility and APK manifest matrix | TKT-P22-001B |
+| TKT-P22-001E | Use compatibility model tier in production setup | TKT-P22-001D |
 | TKT-P22-002 | Packaged Windows exe release-candidate smoke | TKT-P22-001 |
 | TKT-P22-003 | Live Continue IDE validation | TKT-P22-001, TKT-P22-002 |
 | TKT-P22-004 | Release evidence bundle | TKT-P22-002, TKT-P22-003 |

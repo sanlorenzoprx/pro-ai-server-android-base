@@ -68,6 +68,7 @@ from pro_ai_server.agent.ticketizer import (
     write_ticket_drafts,
 )
 from pro_ai_server.android_compatibility import assess_android_compatibility, render_android_compatibility
+from pro_ai_server.android_compatibility import AndroidCompatibilityResult
 from pro_ai_server.continue_config import devstack_restore_instructions, exposure_warnings, write_continue_config
 from pro_ai_server.device_scan import (
     DeviceScanOutputs,
@@ -378,27 +379,9 @@ def android_compatibility(
         raise typer.Exit(code=1)
 
     try:
-        selected_serial = select_device_serial(adb, serial)
-        commands = build_device_scan_commands(adb, selected_serial)
-        profile = build_device_profile_from_scan_outputs(
-            selected_serial,
-            DeviceScanOutputs(
-                meminfo=run_command(list(commands.meminfo)),
-                storage=run_command(list(commands.storage)),
-                abi=run_command(list(commands.abi)),
-                android_version=run_command(list(commands.android_version)),
-                manufacturer=run_command(list(commands.manufacturer)),
-                model=run_command(list(commands.model)),
-                battery=run_command(list(commands.battery)),
-            ),
-        )
-        termux_installer = parse_package_installer(
-            run_optional_command(list(build_package_installer_command(TERMUX_PACKAGE, selected_serial, adb=adb))),
-            TERMUX_PACKAGE,
-        )
-        termux_api_installer = parse_package_installer(
-            run_optional_command(list(build_package_installer_command(TERMUX_API_PACKAGE, selected_serial, adb=adb))),
-            TERMUX_API_PACKAGE,
+        selected_serial, profile, result, termux_installer, termux_api_installer = _scan_android_compatibility(
+            adb,
+            serial,
         )
     except CommandError as exc:
         console.print("[red]Android compatibility check failed while running ADB.[/red]")
@@ -417,15 +400,61 @@ def android_compatibility(
     if termux_api_installer:
         console.print(f"Termux:API installer: {termux_api_installer}")
 
+    for line in render_android_compatibility(result):
+        console.print(line)
+    if not result.supported:
+        raise typer.Exit(code=1)
+
+
+def _scan_android_compatibility_for_setup(serial: str | None) -> AndroidCompatibilityResult:
+    adb = resolve_adb()
+    if not adb:
+        raise ValueError("adb not found. Release builds should include bundled platform-tools.")
+    _selected_serial, _profile, result, _termux_installer, _termux_api_installer = _scan_android_compatibility(adb, serial)
+    if not result.supported:
+        blockers = "; ".join(result.blockers) or result.summary
+        raise ValueError(f"Android device is not production supported: {blockers}")
+    return result
+
+
+def _scan_android_compatibility(
+    adb: str,
+    serial: str | None,
+) -> tuple[str, object, AndroidCompatibilityResult, str | None, str | None]:
+    selected_serial = select_device_serial(adb, serial)
+    commands = build_device_scan_commands(adb, selected_serial)
+    profile = build_device_profile_from_scan_outputs(
+        selected_serial,
+        DeviceScanOutputs(
+            meminfo=run_command(list(commands.meminfo)),
+            storage=run_command(list(commands.storage)),
+            abi=run_command(list(commands.abi)),
+            android_version=run_command(list(commands.android_version)),
+            manufacturer=run_command(list(commands.manufacturer)),
+            model=run_command(list(commands.model)),
+            battery=run_command(list(commands.battery)),
+        ),
+    )
+    termux_installer = parse_package_installer(
+        run_optional_command(list(build_package_installer_command(TERMUX_PACKAGE, selected_serial, adb=adb))),
+        TERMUX_PACKAGE,
+    )
+    termux_api_installer = parse_package_installer(
+        run_optional_command(list(build_package_installer_command(TERMUX_API_PACKAGE, selected_serial, adb=adb))),
+        TERMUX_API_PACKAGE,
+    )
     result = assess_android_compatibility(
         profile,
         termux_installer=termux_installer,
         termux_api_installer=termux_api_installer,
     )
-    for line in render_android_compatibility(result):
-        console.print(line)
-    if not result.supported:
-        raise typer.Exit(code=1)
+    return selected_serial, profile, result, termux_installer, termux_api_installer
+
+
+def _production_profile_from_compatibility(result: AndroidCompatibilityResult) -> str | None:
+    if result.model_tier in {"lightweight", "professional", "max"}:
+        return result.model_tier
+    return None
 
 
 @app.command()
@@ -1584,11 +1613,16 @@ def setup(
     """Plan or execute the guided MVP setup workflow."""
     try:
         production_plan = None
+        compatibility_result = None
+        compatibility_profile = None
+        if production and mode.strip().lower() == "usb" and profile_name is None and ram_gb is None:
+            compatibility_result = _scan_android_compatibility_for_setup(serial)
+            compatibility_profile = _production_profile_from_compatibility(compatibility_result)
         plan = plan_setup_workflow(
             mode=mode,
             host=host,
             ram_gb=ram_gb,
-            profile=profile_name,
+            profile=compatibility_profile or profile_name,
             configure_continue=configure_continue_config,
             create_usb_tunnel=create_usb_tunnel,
             push_scripts=push,
@@ -1601,7 +1635,7 @@ def setup(
                 mode=mode,
                 host=host,
                 ram_gb=ram_gb,
-                profile=profile_name,
+                profile=compatibility_profile or profile_name,
                 configure_continue=configure_continue_config,
                 create_usb_tunnel=create_usb_tunnel,
                 push_scripts=push,
@@ -1617,6 +1651,13 @@ def setup(
 
     if production_plan is not None:
         console.print(f"[bold]Production installer plan[/bold]: {production_plan.summary}")
+        if compatibility_result is not None:
+            console.print(f"Production compatibility tier: {compatibility_result.tier}")
+            console.print(f"Production model profile: {compatibility_result.model_tier}")
+            if compatibility_result.model_tier == "lightweight":
+                console.print(
+                    "[yellow]Warning:[/yellow] Using lightweight profile for customer-safe production setup."
+                )
         for warning in production_plan.warnings:
             console.print(f"[yellow]Warning:[/yellow] {warning}")
         for index, step in enumerate(production_plan.steps, start=1):

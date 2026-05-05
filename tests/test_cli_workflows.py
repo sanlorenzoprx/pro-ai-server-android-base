@@ -24,18 +24,80 @@ def test_setup_prints_plan_without_executing_actions():
     assert "Generated Termux files" not in result.output
 
 
-def test_setup_production_prints_state_machine_without_executing_actions():
+def test_setup_production_uses_compatibility_model_tier_without_explicit_profile(monkeypatch):
     runner = CliRunner()
+
+    def fake_run(command, capture_output, text):
+        import subprocess
+
+        outputs = {
+            ("adb", "devices"): "List of devices attached\nABC123\tdevice\n",
+            ("adb", "-s", "ABC123", "shell", "cat", "/proc/meminfo"): "MemTotal: 5806680 kB",
+            ("adb", "-s", "ABC123", "shell", "df", "-k", "/data"): (
+                "Filesystem 1K-blocks Used Available Use% Mounted on\n/dev/block/dm-2 100 1 67108864 1% /data"
+            ),
+            ("adb", "-s", "ABC123", "shell", "getprop", "ro.product.cpu.abi"): "arm64-v8a\n",
+            ("adb", "-s", "ABC123", "shell", "getprop", "ro.build.version.release"): "13\n",
+            ("adb", "-s", "ABC123", "shell", "getprop", "ro.product.manufacturer"): "motorola\n",
+            ("adb", "-s", "ABC123", "shell", "getprop", "ro.product.model"): "moto g 5G (2022)\n",
+            ("adb", "-s", "ABC123", "shell", "dumpsys", "battery"): "level: 68",
+            (
+                "adb",
+                "-s",
+                "ABC123",
+                "shell",
+                "cmd",
+                "package",
+                "list",
+                "packages",
+                "-i",
+                "com.termux",
+            ): "",
+            (
+                "adb",
+                "-s",
+                "ABC123",
+                "shell",
+                "cmd",
+                "package",
+                "list",
+                "packages",
+                "-i",
+                "com.termux.api",
+            ): "",
+        }
+        return subprocess.CompletedProcess(command, 0, stdout=outputs[tuple(command)], stderr="")
+
+    monkeypatch.setattr(cli, "resolve_adb", lambda: "adb")
+    monkeypatch.setattr(cli.subprocess, "run", fake_run)
 
     result = runner.invoke(cli.app, ["setup", "--production", "--mode", "usb", "--no-continue", "--no-tunnel"])
 
     assert result.exit_code == 0
     assert "Production installer plan" in result.output
+    assert "Production compatibility tier: yellow" in result.output
+    assert "Production model profile: lightweight" in result.output
+    assert "qwen2.5-coder:1.5b chat" in result.output
     assert "host-checks" in result.output
     assert "android-phone-detection" in result.output
     assert "test-prompt" in result.output
     assert "Plan only" in result.output
     assert "Setup plan" not in result.output
+
+
+def test_setup_production_respects_explicit_profile_override_without_compatibility_scan(monkeypatch):
+    runner = CliRunner()
+
+    monkeypatch.setattr(cli, "resolve_adb", lambda: None)
+
+    result = runner.invoke(
+        cli.app,
+        ["setup", "--production", "--mode", "usb", "--profile", "professional", "--no-continue", "--no-tunnel"],
+    )
+
+    assert result.exit_code == 0
+    assert "Production model profile" not in result.output
+    assert "professional profile" in result.output
 
 
 def test_setup_production_rejects_lan_without_advanced_exposure():

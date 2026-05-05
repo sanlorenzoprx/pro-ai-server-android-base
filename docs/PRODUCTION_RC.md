@@ -111,6 +111,7 @@ Recovery log:
 | ADB did not initially see phone | Unlocked phone, restarted ADB, rescanned | Resolved; device detected as ZY22GKMWPN | No |
 | `df /data` mounted at `/storage/emulated/0/Android/obb` | Updated storage parser to accept single-row Android storage mount output | Resolved; scan reports 125.54 GB free | No |
 | Compatibility tier differs from scan model recommendation | Added `android-compatibility` to apply conservative production model lane | Moto g 5G is supported yellow/lightweight despite scan recommending professional | No |
+| Production setup could use raw scanner profile | Updated `setup --production` to use compatibility model tier unless `--profile` or `--ram-gb` is explicitly provided | Yellow devices default to lightweight production profile | No |
 | Termux missing | Added `install-termux-apps`; F-Droid is installed and the command opens Termux and Termux:API package pages or installs supplied APKs with `--yes` | Blocked until Termux and Termux:API are installed and opened once | Yes |
 | Ollama unavailable | Ran `status`, `server-check`, and `test-prompt` after USB tunnel | Blocked until phone-side Ollama server is installed and running | Yes |
 
