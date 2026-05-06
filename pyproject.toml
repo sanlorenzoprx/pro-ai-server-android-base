@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "pro-ai-server"
 version = "0.1.0"
-description = "Turn a spare Android phone into a local AI server for coding workflows."
+description = "Turn an Android phone into a local AI server base for coding workflows and adaptive device installs."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [

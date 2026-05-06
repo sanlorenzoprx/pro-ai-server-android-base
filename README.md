@@ -2,15 +2,9 @@
 
 Turn a spare Android phone into a local AI coding server for Continue-compatible IDEs such as VS Code, Cursor, VSCodium, and Windsurf.
 
-Repository:
+## Current Base
 
-```text
-https://github.com/sanlorenzoprx/pro-ai-server.git
-```
-
-## Current MVP
-
-This branch contains the Python CLI MVP for preparing an Android phone to run Ollama from Termux and expose it to Continue.
+This repository is the Android baseline derived from the Phase 22 real-device validation path. It preserves the working Windows-first CLI, packaged executable flow, device compatibility docs, and agent workflow scaffolding while we expand from a proven USB-first Moto slice toward broader Android compatibility.
 
 The CLI currently supports:
 
@@ -20,7 +14,7 @@ The CLI currently supports:
 - `generate-scripts` creation of inspectable Termux bootstrap, start, model install, Android optimization, and Termux:Widget helper files.
 - `push-scripts --serial <device>` delivery of generated Termux files with `adb push`.
 - `configure-continue --mode usb` Continue `config.yaml` generation, with backup protection for an existing config.
-- `tunnel --serial <device>` USB forwarding with `adb reverse tcp:11434 tcp:11434`.
+- `tunnel --serial <device>` USB forwarding with `adb forward tcp:11434 tcp:11434`.
 - `setup` plan mode and `setup --execute --yes` for the guided MVP flow.
 - `setup-tailscale` host/phone Tailscale readiness checks with Windows `winget`, Android APK install, and Play Store launch support.
 - `status` concise readiness summary for phone, USB tunnel, Ollama, and IDE integration.
@@ -30,13 +24,19 @@ The MVP prefers bundled ADB at `embedded-tools/windows/platform-tools/adb.exe`, 
 
 Cursor integration is supported through the Continue extension. `doctor` detects the `cursor` CLI on the host, and `configure-continue` writes the same `%USERPROFILE%\.continue\config.yaml` used by Continue-compatible IDEs on Windows.
 
-## Agentic Codeflow
+## Android Base Direction
 
-This clone adds an AI layer for evolving Pro AI Server into Pro CodeFlow Server, a local-first agentic coding assistant.
+The working baseline in this repository is a Windows host plus Android phone path that has been validated on real hardware with Termux, Debian proot, Ollama, lightweight model profiles, Continue integration, and packaged executable smoke tests.
 
-The AI layer lives in `.agents/`, `.codex/`, and `.cursor/`. These folders store project memory, PRDs, implementation plans, validation reports, mistake records, workflow definitions, Codex command templates, and Cursor rules so agents can follow a repeatable Plan, Implement, Validate, Report, and Improve loop.
+The next product direction is broader than the original proof lane:
 
-The CodeFlow Build Bridge adds the missing step between roadmap and code: phase plans become build tickets, tickets reference contracts, implementation happens one ticket at a time, validation evidence is written back to reports, and phase closeout records whether the work is actually done.
+- adaptive Android compatibility detection
+- reduced install friction through a companion-app path
+- broader model selection by hardware tier
+- wireless install and connectivity follow-on lanes
+- eventual move away from Termux as the long-term customer runtime if a native Android runtime proves more reliable
+
+The AI workflow layer lives in `.agents/`, `.codex/`, and `.cursor/`. These folders store project memory, PRDs, implementation plans, validation reports, mistake records, workflow definitions, Codex command templates, and Cursor rules so agents can follow a repeatable Plan, Implement, Validate, Report, and Improve loop.
 
 ## Gateway Preview
 
@@ -79,7 +79,7 @@ See [docs/GATEWAY.md](docs/GATEWAY.md) for endpoint contracts and smoke-test ste
 ## Windows Quickstart
 
 ```powershell
-cd "C:\repos\Pro-AI-Server"
+cd "C:\repos\pro-ai-server-android-base"
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -e .[dev]
@@ -99,7 +99,7 @@ See [docs/CLI_WORKFLOW.md](docs/CLI_WORKFLOW.md) for the full MVP CLI flow, incl
 
 ## Connection Modes
 
-USB is the default and safest MVP mode. It keeps Ollama bound to `127.0.0.1:11434` on the phone and uses `adb reverse` so Continue talks to `http://localhost:11434` on the host.
+USB is the default and safest current mode. It keeps Ollama bound to `127.0.0.1:11434` on the phone and uses `adb forward` so Continue talks to `http://localhost:11434` on the host.
 
 LAN and Tailscale modes require `--host` when configuring Continue or planning setup. LAN exposes Ollama to devices on the local network. Tailscale should use a private Tailscale hostname or `100.x.x.x` IP address.
 
@@ -113,3 +113,4 @@ Use `pro-ai-server setup-tailscale` to check Windows and Android Tailscale readi
 - Keep the Ollama server bound to safe defaults unless the user explicitly chooses LAN or private tunnel mode.
 - Detect RAM, storage, CPU architecture, Android version, battery, and Termux readiness before model install.
 - Treat low-memory phones as experimental/lightweight devices.
+- Keep proven Phase 22 hardware evidence, but treat it as the starting point for wider Android coverage rather than the final promise.
