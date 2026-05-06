@@ -60,7 +60,7 @@ Before installing APKs or models, classify Android compatibility:
 pro-ai-server android-compatibility --serial <device-serial>
 ```
 
-See `docs/ANDROID_COMPATIBILITY.md` for green/yellow/red tiers, APK manifest rules, and Termux trust lane guidance.
+See `docs/ANDROID_COMPATIBILITY.md` for green/yellow/red tiers, the Android 12+ support boundary, APK manifest rules, and Termux trust lane guidance.
 
 Show the Android validation lanes and pinned APK manifest:
 
@@ -227,7 +227,7 @@ pro-ai-server tunnel --serial <device-serial>
 This requests:
 
 ```text
-adb reverse tcp:11434 tcp:11434
+adb forward tcp:11434 tcp:11434
 ```
 
 After the tunnel is active, Continue can use `http://localhost:11434` from the Windows host while Ollama remains bound to phone-local loopback in USB mode.
@@ -299,7 +299,7 @@ pro-ai-server diagnose
 pro-ai-server diagnose --output diagnostics.txt
 ```
 
-Diagnostics include host details, ADB path, connected phone state, selected hardware facts, `adb reverse --list`, IDE CLI discovery, and a local Ollama tags check. Reports redact user-profile paths where possible.
+Diagnostics include host details, ADB path, connected phone state, selected hardware facts, `adb forward --list`, IDE CLI discovery, and a local Ollama tags check. Reports redact user-profile paths where possible.
 
 ## 16. Production Smoke Script
 

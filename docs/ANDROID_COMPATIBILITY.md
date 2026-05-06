@@ -1,14 +1,14 @@
 # Android Compatibility
 
-Pro AI Server should cast a wide net, but not a sloppy one. The production promise is strongest when the phone is Android 7.0 or newer, arm64, and has enough RAM for the selected local model.
+Pro AI Server should cast a wide net, but not a sloppy one. The current production promise starts at Android 12, requires arm64, and needs enough RAM for the selected local model.
 
 ## Compatibility Tiers
 
 | Tier | Android | ABI | RAM | Model Tier | Production Position |
 |---|---:|---|---:|---|---|
-| Green | 10-15+ | arm64-v8a | 6 GB+ | professional | DevStack coding assistant with 1.5B/3B models |
-| Yellow | 7-9 | arm64-v8a | 4-6 GB | lightweight | Lightweight local assistant; validate latency |
-| Red | below 7 | any | any | unsupported | Not production supported |
+| Green | 12-15+ | arm64-v8a | 6 GB+ | professional | DevStack coding assistant with 1.5B/3B models |
+| Yellow | 12-15+ | arm64-v8a | 4-6 GB | lightweight | Supported with lightweight models and latency caveats |
+| Red | below 12 | any | any | unsupported | Not production supported |
 | Red | any | 32-bit only | any | unsupported | Not recommended for local LLM production |
 | Red | any | any | below 4 GB | unsupported | Below model floor for the supported product promise |
 
@@ -21,6 +21,8 @@ pro-ai-server android-compatibility --serial <device-serial>
 The command reports Android compatibility tier, supported status, model tier, Termux installer source, Termux:API installer source, warnings, and blockers.
 
 `setup --production` uses this compatibility model tier by default when no explicit `--profile` or `--ram-gb` override is provided. A yellow device therefore uses the lightweight production profile even when the raw hardware scan can recommend a more aggressive RAM-based profile.
+
+Android 11 and below are outside the supported product promise even if the APK lane or Termux technically installs there.
 
 Show the validation matrix:
 
@@ -45,7 +47,7 @@ pro-ai-server apk-manifest --android-version 13
 
 ## Pinned APK Manifest
 
-The production APK lane is pinned in `src/pro_ai_server/android-apk-manifest.json`. These values are not "latest"; they are reviewed stable artifacts for the Android 7+ F-Droid trust lane.
+The production APK lane is pinned in `src/pro_ai_server/android-apk-manifest.json`. These values are not "latest"; they are reviewed stable artifacts for the F-Droid trust lane. Their technical minimum Android version is broader than the supported product promise, which now starts at Android 12.
 The APK manifest template fields are `package_name`, `label`, `version`, `version_code`, `min_android`, `max_android`, `url`, `sha256`, `source`, and `notes`.
 
 ```json
@@ -73,7 +75,7 @@ The APK manifest template fields are `package_name`, `label`, `version`, `versio
       "url": "https://f-droid.org/repo/com.termux_1002.apk",
       "sha256": "e6265a57eb5ca363808488e3b01955958bed93bc0c8a0d281849b363b11027ec",
       "source": "fdroid",
-      "notes": "Stable suggested Termux release for Android 7.0+."
+      "notes": "Stable suggested Termux release with broader technical compatibility than the supported product promise."
     },
     {
       "package_name": "com.termux.api",
@@ -108,11 +110,12 @@ Manifest provenance:
 
 | Lane | Android | ABI | RAM | Model Tier | Status | Product Promise |
 |---|---:|---|---:|---|---|---|
-| android-7-9-yellow | 7-9 | arm64-v8a | 4-6 GB | lightweight | device-needed | Lightweight local assistant with latency caveats |
-| android-10-13-green | 10-13 | arm64-v8a | 6 GB+ | professional | partially-live-validated | DevStack coding assistant with 1.5B/3B models |
-| android-14-15-green | 14-15 | arm64-v8a | 6 GB+ | professional | device-needed | DevStack coding assistant after stricter install behavior is validated |
+| android-12-13-yellow | 12-13 | arm64-v8a | 4-6 GB | lightweight | partially-live-validated | Supported production lane with lightweight models |
+| android-12-13-green | 12-13 | arm64-v8a | 6 GB+ | professional | device-needed | Supported production lane with professional models |
+| android-14-15-plus-yellow | 14-15+ | arm64-v8a | 4-6 GB | lightweight | device-needed | Supported production lane with newer Android install behavior still under validation |
+| android-14-15-plus-green | 14-15+ | arm64-v8a | 6 GB+ | professional | device-needed | Supported production lane with newer Android install behavior still under validation |
 
-The Moto g 5G (2022) live device is Android 13 and belongs to the Android 10-13 lane, but its 5.54 GB RAM keeps it in the yellow/lightweight model tier.
+The Moto g 5G (2022) live device is Android 13 and belongs to the `android-12-13-yellow` lane because its 5.54 GB RAM keeps it in the lightweight model tier.
 
 ## Model Guidance
 

@@ -38,20 +38,20 @@ def test_android_compatibility_green_for_modern_arm64_six_gb_phone():
     assert result.blockers == ()
 
 
-def test_android_compatibility_yellow_for_android_7_to_9_or_lower_ram():
-    result = assess_android_compatibility(make_profile(android_version="8", ram_gb=4.5))
+def test_android_compatibility_yellow_for_android_12_plus_with_lower_ram():
+    result = assess_android_compatibility(make_profile(android_version="12", ram_gb=4.5))
 
     assert result.tier == "yellow"
     assert result.supported is True
     assert result.model_tier == "lightweight"
 
 
-def test_android_compatibility_red_for_android_below_7():
-    result = assess_android_compatibility(make_profile(android_version="6", ram_gb=8))
+def test_android_compatibility_red_for_android_below_12():
+    result = assess_android_compatibility(make_profile(android_version="11", ram_gb=8))
 
     assert result.tier == "red"
     assert result.supported is False
-    assert any("Android 7.0 or newer" in blocker for blocker in result.blockers)
+    assert any("Android 12 or newer" in blocker for blocker in result.blockers)
 
 
 def test_android_compatibility_red_for_32_bit_abi():
@@ -102,7 +102,7 @@ def test_apk_manifest_selects_entry_by_android_range():
     assert manifest.for_package("com.termux", 6) is None
 
 
-def test_default_apk_manifest_is_complete_for_android_7_plus_production_lane():
+def test_default_apk_manifest_is_complete_for_supported_android_12_lane():
     manifest = load_apk_manifest()
 
     for package_name in ("org.fdroid.fdroid", "com.termux", "com.termux.api"):
@@ -126,6 +126,5 @@ def test_render_apk_manifest_and_validation_lanes_include_android_bands():
 
     assert any("Android major: 14" in line for line in manifest_lines)
     assert any("Termux" in line for line in manifest_lines)
-    assert any("android-7-9-yellow" in line for line in lane_lines)
-    assert any("android-10-13-green" in line for line in lane_lines)
-    assert any("android-14-15-green" in line for line in lane_lines)
+    assert any("android-12-13" in line for line in lane_lines)
+    assert any("android-14-15-plus" in line for line in lane_lines)

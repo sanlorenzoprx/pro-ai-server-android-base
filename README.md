@@ -36,6 +36,11 @@ The next product direction is broader than the original proof lane:
 - wireless install and connectivity follow-on lanes
 - eventual move away from Termux as the long-term customer runtime if a native Android runtime proves more reliable
 
+Current support promise:
+
+- Supported: Android 12+
+- Not supported: Android 11 and below
+
 The AI workflow layer lives in `.agents/`, `.codex/`, and `.cursor/`. These folders store project memory, PRDs, implementation plans, validation reports, mistake records, workflow definitions, Codex command templates, and Cursor rules so agents can follow a repeatable Plan, Implement, Validate, Report, and Improve loop.
 
 ## Gateway Preview

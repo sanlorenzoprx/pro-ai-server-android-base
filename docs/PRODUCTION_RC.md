@@ -68,9 +68,8 @@ Android lane validation matrix:
 
 | Lane | Android | Device Needed | Current Evidence | Status |
 |---|---:|---|---|---|
-| android-7-9-yellow | 7-9 | Yes | Manifest supports Android 7+; no live device recorded yet | blocked |
-| android-10-13-green | 10-13 | Partially | Moto g 5G Android 13 detected; RAM places it in yellow/lightweight model tier | partial |
-| android-14-15-green | 14-15 | Yes | Manifest supports Android 7+; stricter install/background behavior still needs device proof | blocked |
+| android-12-13 | 12-13 | Partially | Moto g 5G Android 13 detected; RAM places it in yellow/lightweight model tier | partial |
+| android-14-15-plus | 14-15+ | Yes | Supported product promise starts at Android 12; newer install/background behavior still needs device proof | blocked |
 
 Device identity record:
 
@@ -94,7 +93,7 @@ Run checklist:
 | Production execute | `pro-ai-server setup --execute --yes --serial <serial>` | Setup completes or records recoverable failure | blocked | TBD |
 | Termux readiness | `pro-ai-server termux-check --serial <serial>` | Termux, Termux:API, and home state are ready | blocked | Termux and Termux:API not installed; Termux home not initialized |
 | Script push | `pro-ai-server push-scripts --serial <serial>` | Termux scripts are delivered | blocked | `/data/data/com.termux` permission denied because Termux is unavailable |
-| USB tunnel | `pro-ai-server tunnel --serial <serial>` | `adb reverse tcp:11434 tcp:11434` is active | completed | Port 11434 reverse requested successfully |
+| USB tunnel | `pro-ai-server tunnel --serial <serial>` | `adb forward tcp:11434 tcp:11434` is active | completed | Port 11434 forward requested successfully |
 | Server status | `pro-ai-server status` | Local server readiness is visible | blocked | Phone and tunnel OK; Ollama localhost:11434 not reachable |
 | Model inventory | `pro-ai-server server-check` | Required model inventory is visible | blocked | Ollama localhost:11434 not reachable |
 | Test prompt | `pro-ai-server test-prompt` | Local model returns a valid response | blocked | Ollama localhost:11434 not reachable |
@@ -125,7 +124,7 @@ Recovery log:
 | Production setup could use raw scanner profile | Updated `setup --production` to use compatibility model tier unless `--profile` or `--ram-gb` is explicitly provided | Yellow devices default to lightweight production profile | No |
 | Termux missing | Added `install-termux-apps`; F-Droid is installed and the command opens Termux and Termux:API package pages or installs supplied APKs with `--yes` | Blocked until Termux and Termux:API are installed and opened once | Yes |
 | Setup did not drive phone-side stack | Added TKT-P22-003A so `setup --production --execute --yes` can install/open Termux apps, verify readiness, push scripts, request `bootstrap-phone-stack.sh`, and verify endpoint/test prompt | Source implementation complete; live phone remains blocked until Termux/Termux:API install is approved or supplied via trusted APKs | Yes |
-| APK manifest values were placeholders | Added reviewed Android 7+ F-Droid APK manifest and `--use-pinned-apk-manifest` setup path | Source implementation complete; live cross-lane devices still needed for Android 7-9 and 14-15 | No |
+| APK manifest values were placeholders | Added reviewed F-Droid APK manifest and `--use-pinned-apk-manifest` setup path | Source implementation complete; live cross-lane devices still needed for Android 14+ while the supported product promise remains Android 12+ | No |
 | Ollama unavailable | Ran `status`, `server-check`, and `test-prompt` after USB tunnel | Blocked until phone-side Ollama server is installed and running | Yes |
 | ADB tunnel direction was wrong for host-to-phone access | Live Moto validation proved `adb reverse tcp:11434 tcp:11434` creates a device-side listener and can loop when combined with host access; switched USB tunnel behavior to `adb forward tcp:11434 tcp:11434` | Host reached phone Ollama at `http://localhost:11434`; model inventory and test prompt passed | No |
 | Phone bootstrap pulled models before starting Ollama | Updated generated `bootstrap-phone-stack.sh` to start `~/start-pro-ai-server.sh` before running `~/install-models.sh` | Manual recovery validated start-then-pull order with both lightweight models installed | No |
@@ -137,7 +136,7 @@ Status: `completed` for the lightweight USB-first endpoint path.
 Evidence:
 
 - ADB detected `ZY22GKMWPN` as motorola moto g 5G (2022), Android 13, arm64-v8a.
-- Termux `0.118.3`, Termux:API `0.53.0`, and F-Droid were installed from the pinned Android 7+ manifest lane.
+- Termux `0.118.3`, Termux:API `0.53.0`, and F-Droid were installed from the pinned manifest lane used by the Android 12+ product path.
 - Android blocked the first ADB Termux APK install with `INSTALL_FAILED_VERIFICATION_FAILURE`; temporarily disabling `verifier_verify_adb_installs` allowed install, and the setting was restored afterward.
 - Android 13 blocked direct ADB writes to `/data/data/com.termux/files/home`; scripts were manually staged through `/data/local/tmp` and launched from Termux.
 - Termux first-run packages had a `curl`/OpenSSL mismatch; `apt update` plus `apt full-upgrade -y` repaired the Termux package set.
@@ -203,7 +202,7 @@ Completed:
 - Hardware scan.
 - Production setup plan.
 - Production setup now uses compatibility model tier: yellow/lightweight for Moto g 5G.
-- USB reverse tunnel on port 11434.
+- USB forward tunnel on port 11434.
 - F-Droid package pages opened with `pro-ai-server install-termux-apps --serial ZY22GKMWPN`.
 - VS Code and Cursor Continue readiness through `pro-ai-server doctor`.
 - Android compatibility command completed: yellow tier, supported, lightweight model tier.

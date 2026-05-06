@@ -78,40 +78,28 @@ class AndroidValidationLane:
 
 ANDROID_VALIDATION_LANES: tuple[AndroidValidationLane, ...] = (
     AndroidValidationLane(
-        key="android-7-9-yellow",
-        android_range="7-9",
-        min_android=7,
-        max_android=9,
-        abi="arm64-v8a",
-        ram_gb="4-6",
-        model_tier="lightweight",
-        product_promise="Lightweight local assistant with latency caveats.",
-        validation_status="device-needed",
-        notes="Use current Termux stable lane; no Android 5/6 archive promise.",
-    ),
-    AndroidValidationLane(
-        key="android-10-13-green",
-        android_range="10-13",
-        min_android=10,
+        key="android-12-13",
+        android_range="12-13",
+        min_android=12,
         max_android=13,
         abi="arm64-v8a",
-        ram_gb="6+",
-        model_tier="professional",
-        product_promise="DevStack coding assistant with 1.5B/3B models.",
+        ram_gb="4+",
+        model_tier="lightweight/professional",
+        product_promise="Supported production lane. Use lightweight under 6 GB RAM and professional at 6 GB+.",
         validation_status="partially-live-validated",
-        notes="Moto g 5G Android 13 is live yellow/lightweight because RAM is under 6 GB.",
+        notes="Moto g 5G Android 13 is live validated in yellow/lightweight because RAM is under 6 GB.",
     ),
     AndroidValidationLane(
-        key="android-14-15-green",
-        android_range="14-15",
+        key="android-14-15-plus",
+        android_range="14-15+",
         min_android=14,
-        max_android=15,
+        max_android=None,
         abi="arm64-v8a",
-        ram_gb="6+",
-        model_tier="professional",
-        product_promise="DevStack coding assistant after stricter install behavior is validated.",
+        ram_gb="4+",
+        model_tier="lightweight/professional",
+        product_promise="Supported production lane after newer Android install behavior is validated.",
         validation_status="device-needed",
-        notes="Validate unknown-app install prompts and background behavior on Android 14/15.",
+        notes="Validate unknown-app install prompts and background behavior on Android 14+.",
     ),
 )
 
@@ -198,8 +186,8 @@ def assess_android_compatibility(
     else:
         android_major_value = android_major
 
-    if android_major_value < 7:
-        blockers.append("Android 7.0 or newer is required for the supported Termux production lane.")
+    if android_major_value < 12:
+        blockers.append("Android 12 or newer is required for the supported production lane.")
 
     if profile.abi.lower() not in {"arm64-v8a", "aarch64"}:
         blockers.append("arm64 Android is required for the supported local LLM production lane.")
@@ -214,12 +202,12 @@ def assess_android_compatibility(
         supported = False
         model_tier = "unsupported"
         summary = "Not production supported."
-    elif android_major_value >= 10 and profile.ram_gb >= 6:
+    elif android_major_value >= 12 and profile.ram_gb >= 6:
         tier = "green"
         supported = True
         model_tier = "professional"
         summary = "Production candidate for DevStack with professional model profile."
-    elif android_major_value >= 7 and profile.ram_gb >= 4:
+    elif android_major_value >= 12 and profile.ram_gb >= 4:
         tier = "yellow"
         supported = True
         model_tier = "lightweight"

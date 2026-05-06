@@ -86,7 +86,7 @@ To use the bundled reviewed APK manifest instead of supplying URL/SHA-256 flags 
 pro-ai-server setup --production --execute --yes --serial <device-serial> --use-pinned-apk-manifest
 ```
 
-If this fails on Android below 7, the phone is outside the production APK lane. If it fails on Android 14/15, record the install prompt or background restriction in `docs/PRODUCTION_RC.md` before changing the promise.
+If this fails on Android 11 or below, the phone is outside the supported product promise. If it fails on Android 14/15+, record the install prompt or background restriction in `docs/PRODUCTION_RC.md` before changing the promise.
 
 Termux:Widget manual placement is still required. Install Termux:Widget, confirm the generated `Start Pro AI Server` shortcut is in `~/.shortcuts`, then add the widget or shortcut from the Android home screen.
 
@@ -121,7 +121,7 @@ For USB mode, start the generated script inside Termux, then create the reverse 
 pro-ai-server tunnel
 ```
 
-Confirm Continue points to `http://localhost:11434`. In USB mode, Ollama should bind to `127.0.0.1:11434` on the phone and Windows reaches it through `adb reverse tcp:11434 tcp:11434`.
+Confirm Continue points to `http://localhost:11434`. In USB mode, Ollama should bind to `127.0.0.1:11434` on the phone and Windows reaches it through `adb forward tcp:11434 tcp:11434`.
 
 For LAN or Tailscale mode, confirm the phone script was generated for that mode and that Continue uses the explicit `--host` value.
 
@@ -152,7 +152,7 @@ If `test-prompt` reports a missing model, run `~/install-models.sh` in Termux. I
 Run:
 
 ```powershell
-adb reverse --list
+adb forward --list
 pro-ai-server tunnel
 pro-ai-server status
 ```

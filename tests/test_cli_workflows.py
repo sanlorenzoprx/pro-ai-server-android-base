@@ -175,9 +175,8 @@ def test_android_validation_matrix_prints_required_android_lanes():
     result = runner.invoke(cli.app, ["android-validation-matrix"])
 
     assert result.exit_code == 0
-    assert "android-7-9-yellow" in result.output
-    assert "android-10-13-green" in result.output
-    assert "android-14-15-green" in result.output
+    assert "android-12-13" in result.output
+    assert "android-14-15-plus" in result.output
 
 
 def test_setup_production_execute_installs_pushes_requests_phone_stack_and_verifies_endpoint(monkeypatch, tmp_path):
