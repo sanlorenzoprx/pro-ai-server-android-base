@@ -68,7 +68,7 @@ def test_tunnel_step_defaults_to_usb_and_can_be_overridden():
     assert "create-usb-tunnel" not in step_keys(usb_without_tunnel)
 
     tunnel_step = next(step for step in lan_with_tunnel.steps if step.key == "create-usb-tunnel")
-    assert tunnel_step.commands == (("adb", "reverse", "tcp:11434", "tcp:11434"),)
+    assert tunnel_step.commands == (("adb", "forward", "tcp:11434", "tcp:11434"),)
 
 
 def test_push_scripts_step_notes_inspectable_adb_push_delivery():
@@ -147,7 +147,7 @@ def test_production_installer_reuses_setup_workflow_for_models_scripts_push_and_
     assert "qwen2.5-coder:1.5b" in next(step.detail for step in plan.steps if step.key == "model-profile-selection")
     assert "Generate" in next(step.detail for step in plan.steps if step.key == "script-generation")
     assert "adb commands" in next(step.detail for step in plan.steps if step.key == "script-push")
-    assert "adb reverse" in next(step.detail for step in plan.steps if step.key == "usb-tunnel")
+    assert "adb forward" in next(step.detail for step in plan.steps if step.key == "usb-tunnel")
 
 
 def test_production_installer_failure_mapping_is_structured():

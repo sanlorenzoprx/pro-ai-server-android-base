@@ -24,7 +24,11 @@ Move Pro AI Server and Pro Agentic Coding Server from build-ready to release-can
 | TKT-P22-002 | Packaged Windows exe release-candidate smoke | TKT-P22-001 |
 | TKT-P22-003 | Live Continue IDE validation | TKT-P22-001, TKT-P22-002 |
 | TKT-P22-003A | End-to-end phone stack bootstrap execution | TKT-P22-003 |
+| TKT-P22-003B | Installer automation hardening from Moto live smoke | TKT-P22-003A |
 | TKT-P22-004 | Release evidence bundle | TKT-P22-002, TKT-P22-003 |
+| TKT-P22-004A | Evidence cleanup and RC bundle hygiene | TKT-P22-004 |
+| TKT-P22-004B | Full source validation after live hardware fixes | TKT-P22-004A |
+| TKT-P22-004C | Packaged exe live smoke on Moto lightweight lane | TKT-P22-004B |
 | TKT-P22-005 | RC go/no-go closeout | TKT-P22-004 |
 
 ## Required Contracts

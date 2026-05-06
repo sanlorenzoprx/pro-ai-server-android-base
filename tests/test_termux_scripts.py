@@ -104,6 +104,7 @@ def test_phone_stack_bootstrap_runs_full_local_ai_stack_and_starts_server():
     assert "setup-ollama-debian.sh" in script
     assert "~/install-models.sh" in script
     assert "nohup ~/start-pro-ai-server.sh" in script
+    assert script.index("nohup ~/start-pro-ai-server.sh") < script.index("~/install-models.sh")
     assert "pro-ai-server-bootstrap.log" in script
 
 

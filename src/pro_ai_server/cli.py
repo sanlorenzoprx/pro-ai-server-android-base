@@ -2089,9 +2089,9 @@ def setup(
                     console.print(f"Open Termux and run: ~/{PHONE_STACK_BOOTSTRAP_SCRIPT}")
 
             if create_usb_tunnel is not False and plan.mode == "usb":
-                run_command(adb_command(adb, ["reverse", "tcp:11434", "tcp:11434"], selected_serial))
+                run_command(adb_command(adb, ["forward", "tcp:11434", "tcp:11434"], selected_serial))
                 tunnel_requested = True
-                console.print(f"[green]ADB reverse tunnel requested for device {selected_serial}.[/green]")
+                console.print(f"[green]ADB forward tunnel requested for device {selected_serial}.[/green]")
 
         if production:
             api_base = api_base_for_mode(plan.mode, plan.host)
@@ -2212,16 +2212,16 @@ def tunnel(serial: str | None = typer.Option(None, help="ADB device serial to us
 
     try:
         selected_serial = select_device_serial(adb, serial)
-        output = run_command(adb_command(adb, ["reverse", "tcp:11434", "tcp:11434"], selected_serial))
+        output = run_command(adb_command(adb, ["forward", "tcp:11434", "tcp:11434"], selected_serial))
     except CommandError as exc:
-        console.print("[red]ADB reverse tunnel failed.[/red]")
+        console.print("[red]ADB forward tunnel failed.[/red]")
         console.print(str(exc))
         raise typer.Exit(code=1) from exc
     except ValueError as exc:
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(code=1) from exc
 
-    console.print(f"[green]ADB reverse tunnel requested for device {selected_serial} on port 11434.[/green]")
+    console.print(f"[green]ADB forward tunnel requested for device {selected_serial} on port 11434.[/green]")
     if output:
         console.print(output)
 
@@ -2241,14 +2241,14 @@ def status(api_base: str = typer.Option("http://localhost:11434", help="Ollama A
     """Show concise phone, tunnel, Ollama, and IDE readiness."""
     adb = resolve_adb()
     adb_devices_output = run_optional_command([adb, "devices"]) if adb else None
-    adb_reverse_output = run_optional_command([adb, "reverse", "--list"]) if adb else None
+    adb_forward_output = run_optional_command([adb, "forward", "--list"]) if adb else None
     tags_output = run_optional_command(list(build_ollama_tags_command(api_base)))
     ollama_status = assess_ollama_server_status(tags_output)
     ide_statuses = tuple(detect_continue_extension_status(ide) for ide in detect_ide_clis())
 
     report = build_status_report(
         adb_devices_output,
-        adb_reverse_output,
+        adb_forward_output,
         ollama_status,
         ide_statuses,
         adb_path=adb,

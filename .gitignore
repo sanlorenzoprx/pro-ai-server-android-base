@@ -8,3 +8,9 @@ build/
 *.egg-info/
 .env
 .DS_Store
+.cache/
+generated/
+debug.log
+diagnostics.txt
+termux-*.png
+pro-ai-server-bootstrap.log

@@ -62,6 +62,7 @@ Use status values `completed`, `blocked`, or `skipped`. Do not leave a check bla
 | Phone | Android | Serial Recorded | RAM Profile | Chat Model | Autocomplete Model | ADB Authorized | Setup Execute | Termux Ready | Scripts Pushed | Tunnel | Model Inventory | Test Prompt | Status | Result |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | motorola moto g 5G (2022) | 13 | ZY22GKMWPN | professional | qwen2.5-coder:3b | qwen2.5-coder:1.5b-base | completed | skipped | blocked | blocked | completed | blocked | blocked | blocked | Termux/Ollama not installed yet |
+| motorola moto g 5G (2022) | 13 | ZY22GKMWPN | yellow/lightweight | qwen2.5-coder:1.5b | qwen2.5-coder:0.5b | completed | partial | completed | manual-stage | completed | completed | completed | completed | USB-first phone endpoint validated with adb forward |
 
 Android lane validation matrix:
 
@@ -126,6 +127,30 @@ Recovery log:
 | Setup did not drive phone-side stack | Added TKT-P22-003A so `setup --production --execute --yes` can install/open Termux apps, verify readiness, push scripts, request `bootstrap-phone-stack.sh`, and verify endpoint/test prompt | Source implementation complete; live phone remains blocked until Termux/Termux:API install is approved or supplied via trusted APKs | Yes |
 | APK manifest values were placeholders | Added reviewed Android 7+ F-Droid APK manifest and `--use-pinned-apk-manifest` setup path | Source implementation complete; live cross-lane devices still needed for Android 7-9 and 14-15 | No |
 | Ollama unavailable | Ran `status`, `server-check`, and `test-prompt` after USB tunnel | Blocked until phone-side Ollama server is installed and running | Yes |
+| ADB tunnel direction was wrong for host-to-phone access | Live Moto validation proved `adb reverse tcp:11434 tcp:11434` creates a device-side listener and can loop when combined with host access; switched USB tunnel behavior to `adb forward tcp:11434 tcp:11434` | Host reached phone Ollama at `http://localhost:11434`; model inventory and test prompt passed | No |
+| Phone bootstrap pulled models before starting Ollama | Updated generated `bootstrap-phone-stack.sh` to start `~/start-pro-ai-server.sh` before running `~/install-models.sh` | Manual recovery validated start-then-pull order with both lightweight models installed | No |
+
+### 2026-05-06: Moto g 5G End-to-End Phone Endpoint Validation
+
+Status: `completed` for the lightweight USB-first endpoint path.
+
+Evidence:
+
+- ADB detected `ZY22GKMWPN` as motorola moto g 5G (2022), Android 13, arm64-v8a.
+- Termux `0.118.3`, Termux:API `0.53.0`, and F-Droid were installed from the pinned Android 7+ manifest lane.
+- Android blocked the first ADB Termux APK install with `INSTALL_FAILED_VERIFICATION_FAILURE`; temporarily disabling `verifier_verify_adb_installs` allowed install, and the setting was restored afterward.
+- Android 13 blocked direct ADB writes to `/data/data/com.termux/files/home`; scripts were manually staged through `/data/local/tmp` and launched from Termux.
+- Termux first-run packages had a `curl`/OpenSSL mismatch; `apt update` plus `apt full-upgrade -y` repaired the Termux package set.
+- The Ollama ARM64 payload downloaded and installed inside Debian proot.
+- Android prompted "Let app always run in background?" for Termux; `Allow` was required for background server behavior.
+- `adb forward tcp:11434 tcp:11434` exposed the phone Ollama endpoint to Windows at `http://localhost:11434`.
+- `curl http://localhost:11434/api/tags` returned both lightweight models:
+  - `qwen2.5-coder:1.5b`
+  - `qwen2.5-coder:0.5b`
+- `pro-ai-server server-check --profile lightweight` passed.
+- `pro-ai-server test-prompt --profile lightweight` passed with response `pro-ai-server-ready`.
+
+Release impact: the narrow local endpoint proof is now real on the Moto g 5G yellow/lightweight lane. The remaining product work is to fold the manual recovery into first-run automation and rerun packaged-exe smoke with the corrected `adb forward` tunnel.
 
 ## Hardware Smoke Attempts
 
@@ -249,6 +274,21 @@ Launch caveat: the connected Moto g 5G (2022) is a yellow compatibility device, 
 
 ## Release Evidence Bundle
 
+TKT-P22-004A and TKT-P22-004B evidence:
+
+- Evidence hygiene completed: transient APK cache, generated Termux files, debug logs, and raw Termux screenshots are ignored rather than committed.
+- Durable Moto live-smoke results are recorded in this document.
+- Full source validation after the live fixes passed:
+  - `pytest`: 422 passed
+  - `ruff check .`: passed
+  - `pro-ai-server validate-release`: passed
+- TKT-P22-004C packaged exe live smoke passed:
+  - `scripts/build-windows-exe.ps1`: passed
+  - `dist\pro-ai-server\pro-ai-server.exe validate-release`: passed
+  - `dist\pro-ai-server\pro-ai-server.exe status`: passed with phone, `adb forward`, Ollama, and IDE readiness
+  - `dist\pro-ai-server\pro-ai-server.exe server-check --profile lightweight`: passed
+  - `dist\pro-ai-server\pro-ai-server.exe test-prompt --profile lightweight`: passed with `pro-ai-server-ready`
+
 The final evidence bundle should include:
 
 - Hardware smoke matrix.
@@ -268,3 +308,7 @@ Use one of these decisions:
 - `no-go`: a blocking issue prevents private beta or paid install.
 
 Do not mark `go` unless at least one Android phone, the packaged Windows executable, and one launch IDE have completed the Phase 22 evidence path.
+
+Current decision candidate: `go-with-limitations`.
+
+Reason: the narrow Windows plus USB plus Moto g 5G lightweight path is now live validated through the packaged executable, including phone endpoint, model inventory, and test prompt. Limitations remain around unattended first-run setup automation, especially Termux package repair, Android install verification, private Termux storage access, and background execution approval.
