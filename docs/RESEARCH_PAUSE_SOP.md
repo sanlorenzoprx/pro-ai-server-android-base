@@ -11,6 +11,8 @@ The purpose is simple:
 
 This is not copying for its own sake. It is technical due diligence and pattern harvesting.
 
+This repository treats research as part of the product philosophy. We are building a real product, but we are also building an adaptable platform and learning system. That means one of the core skills of the project is knowing when to adopt, adapt, or discard outside work with discipline.
+
 ## When To Trigger A Research Pause
 
 Trigger this SOP before work such as:

@@ -17,6 +17,7 @@ Agentic Codeflow direction:
 - Use a Plan, Implement, Validate loop.
 - Use the CodeFlow Build Bridge to convert phases into concrete build tickets before runtime work starts.
 - Use a Research Pause before major new directions so we adapt proven external patterns before writing big tickets.
+- Treat research and adaptation judgment as core product-building capabilities.
 - Define endpoint, config, schema, and validation contracts before implementation.
 - Store plans, reports, mistakes, and rules in version control.
 - Prefer small, tested runtime changes staged by phase.
@@ -25,6 +26,12 @@ Agentic Codeflow direction:
 Official product name for this clone:
 
 - Pro CodeFlow Server
+
+Philosophy:
+
+- We are building a product and an adaptable build platform at the same time.
+- The project should teach us how to build the next layer with better judgment.
+- The ability to adopt, adapt, or discard outside work is part of the core craft here.
 
 Build bridge rule:
 

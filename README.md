@@ -46,6 +46,15 @@ The AI workflow layer lives in `.agents/`, `.codex/`, and `.cursor/`. These fold
 Top-level reasoning rule:
 
 - Before major new directions or subsystem changes, run a Research Pause and review similar external projects first. See [docs/RESEARCH_PAUSE_SOP.md](docs/RESEARCH_PAUSE_SOP.md).
+- Current phone-runtime milestones are tracked in [docs/NEXT_MILESTONES.md](docs/NEXT_MILESTONES.md).
+
+Core philosophy:
+
+- We are building a product, but our essence is an adaptable build platform.
+- The project should teach us how to build the next layer more intelligently.
+- Research is a core engineering activity, not overhead.
+- The ability to adopt, adapt, or discard outside work is a strategic skill, not a side task.
+- We spend our deepest effort on the parts that are truly novel for this product.
 
 ## Gateway Preview
 

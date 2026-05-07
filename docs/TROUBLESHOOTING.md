@@ -115,7 +115,7 @@ The runner writes `~/pro-ai-server-bootstrap.log`, starts the server with `~/sta
 
 ### Ollama not responding on localhost:11434
 
-For USB mode, start the generated script inside Termux, then create the reverse tunnel:
+For USB mode, start the generated script inside Termux, then create the USB forward tunnel:
 
 ```powershell
 pro-ai-server tunnel
