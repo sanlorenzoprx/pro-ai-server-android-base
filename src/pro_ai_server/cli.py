@@ -104,6 +104,7 @@ from pro_ai_server.ide import installed_ide_clis
 from pro_ai_server.ide import launch_ide_readiness_matrix
 from pro_ai_server.installer_ui import build_installer_ui_flow, render_installer_ui_flow
 from pro_ai_server.models import model_plan_for_profile, model_plan_for_ram
+from pro_ai_server.native_runtime import build_native_runtime_config_for_model_plan
 from pro_ai_server.ollama import (
     DEFAULT_TEST_PROMPT,
     assess_model_inventory,
@@ -2234,6 +2235,40 @@ def diagnose(output: Path | None = typer.Option(None, help="Optional file path f
     if output:
         written = write_diagnostics_report(report, output)
         console.print(f"[green]Wrote diagnostics report:[/green] {written}")
+
+
+@app.command("native-runtime-config")
+def native_runtime_config(
+    profile_name: str = typer.Option("professional", "--profile", help="Model profile to resolve."),
+    ram_gb: float | None = typer.Option(None, help="Optional RAM value used to select a profile."),
+    prefer: str = typer.Option("chat", help="Resolve the chat or autocomplete runtime lane."),
+    models_root: Path = typer.Option(Path("models"), help="Root directory containing GGUF model files."),
+    host: str = typer.Option("127.0.0.1", help="Native runtime bind host."),
+    port: int = typer.Option(11434, help="Native runtime bind port."),
+) -> None:
+    """Render the resolved native runtime config without starting the engine."""
+    try:
+        plan = model_plan_for_ram(ram_gb) if ram_gb is not None else model_plan_for_profile(profile_name)
+        config = build_native_runtime_config_for_model_plan(
+            plan,
+            models_root=models_root,
+            prefer=prefer,
+            host=host,
+            port=port,
+        )
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    console.print("[bold]Native runtime config[/bold]")
+    console.print(f"Profile: {plan.profile}")
+    console.print(f"Preference: {prefer.strip().lower()}")
+    console.print(f"Model contract: {config.model.contract_name}")
+    console.print(f"GGUF path: {config.model.gguf_path}")
+    console.print(f"API base: {config.api_base}")
+    console.print(f"Context length: {config.context_length}")
+    console.print(f"Threads: {config.threads}")
+    console.print(f"GPU layers: {config.gpu_layers}")
 
 
 @app.command()

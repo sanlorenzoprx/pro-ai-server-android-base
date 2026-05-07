@@ -2255,6 +2255,65 @@ def test_status_prints_concise_readiness_report(monkeypatch):
     assert "OK Ollama: responding on /api/tags" in result.output
 
 
+def test_native_runtime_config_prints_resolved_chat_config():
+    runner = CliRunner()
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "native-runtime-config",
+            "--profile",
+            "professional",
+            "--prefer",
+            "chat",
+            "--models-root",
+            "bundled-models",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Native runtime config" in result.output
+    assert "Profile: professional" in result.output
+    assert "Preference: chat" in result.output
+    assert "Model contract: qwen2.5-coder:3b" in result.output
+    assert "GGUF path: bundled-models\\qwen2.5-coder-3b-instruct-q4_k_m.gguf" in result.output
+    assert "API base: http://127.0.0.1:11434" in result.output
+    assert "Context length: 8192" in result.output
+    assert "Threads: 6" in result.output
+
+
+def test_native_runtime_config_can_select_profile_from_ram():
+    runner = CliRunner()
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "native-runtime-config",
+            "--ram-gb",
+            "4.5",
+            "--prefer",
+            "autocomplete",
+            "--models-root",
+            "bundled-models",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Profile: lightweight" in result.output
+    assert "Preference: autocomplete" in result.output
+    assert "Model contract: qwen2.5-coder:0.5b" in result.output
+    assert "GGUF path: bundled-models\\qwen2.5-coder-0.5b-instruct-q4_k_m.gguf" in result.output
+
+
+def test_native_runtime_config_rejects_invalid_preference():
+    runner = CliRunner()
+
+    result = runner.invoke(cli.app, ["native-runtime-config", "--prefer", "summary"])
+
+    assert result.exit_code == 1
+    assert "prefer value must be 'chat' or 'autocomplete'" in result.output
+
+
 def test_setup_tailscale_reports_already_installed_on_host_and_phone(monkeypatch):
     runner = CliRunner()
 

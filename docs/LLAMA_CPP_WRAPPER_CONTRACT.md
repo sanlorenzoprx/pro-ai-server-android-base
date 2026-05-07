@@ -13,6 +13,7 @@ See:
 Current scaffold:
 
 - [src/pro_ai_server/native_runtime.py](/abs/c:/repos/pro-ai-server-android-base/src/pro_ai_server/native_runtime.py)
+- `pro-ai-server native-runtime-config --profile professional --prefer chat`
 
 ## Purpose
 
@@ -196,6 +197,21 @@ that resolves:
 - stable contract name
 - concrete GGUF filename
 - runtime defaults such as context length and threads
+
+The current CLI inspection surface is:
+
+```powershell
+pro-ai-server native-runtime-config --profile professional --prefer chat
+```
+
+It should render:
+
+- selected profile
+- selected runtime role
+- stable contract model name
+- resolved GGUF path
+- API base
+- runtime defaults
 
 ## Model Identity Rule
 
