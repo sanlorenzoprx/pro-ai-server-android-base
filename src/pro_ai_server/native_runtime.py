@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import time
 from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
@@ -65,6 +67,19 @@ class NativeRuntimeLaunchPlan:
     @property
     def ready(self) -> bool:
         return all(check.ok for check in self.checks)
+
+
+@dataclass(frozen=True)
+class NativeRuntimeProcess:
+    pid: int
+    command: NativeRuntimeServerCommand
+
+
+@dataclass(frozen=True)
+class NativeRuntimeReadiness:
+    ok: bool
+    attempts: int
+    detail: str
 
 
 @dataclass(frozen=True)
@@ -239,6 +254,53 @@ def render_native_runtime_launch_plan(plan: NativeRuntimeLaunchPlan) -> tuple[st
     return tuple(lines)
 
 
+def start_native_runtime_process(
+    plan: NativeRuntimeLaunchPlan,
+    *,
+    force: bool = False,
+    popen: Any = subprocess.Popen,
+) -> NativeRuntimeProcess:
+    if not plan.ready and not force:
+        missing = ", ".join(check.key for check in plan.checks if not check.ok)
+        raise ValueError(f"Native runtime launch plan is not ready: {missing}.")
+    process = popen(
+        list(plan.command.command),
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        stdin=subprocess.DEVNULL,
+        close_fds=True,
+    )
+    return NativeRuntimeProcess(pid=int(process.pid), command=plan.command)
+
+
+def wait_for_native_runtime_readiness(
+    api_base: str,
+    *,
+    timeout_seconds: float = 30.0,
+    interval_seconds: float = 1.0,
+    fetch_tags: Any | None = None,
+    sleep: Any = time.sleep,
+) -> NativeRuntimeReadiness:
+    fetch = fetch_tags or _fetch_tags
+    attempts = 0
+    deadline = time.monotonic() + timeout_seconds
+    last_error = "runtime did not respond before timeout"
+    while True:
+        attempts += 1
+        try:
+            payload = fetch(api_base)
+        except OSError as exc:
+            last_error = str(exc)
+        else:
+            if isinstance(payload, str) and '"models"' in payload:
+                return NativeRuntimeReadiness(ok=True, attempts=attempts, detail="runtime responded on /api/tags")
+            last_error = "runtime /api/tags response did not include models"
+
+        if time.monotonic() >= deadline:
+            return NativeRuntimeReadiness(ok=False, attempts=attempts, detail=last_error)
+        sleep(max(0.0, interval_seconds))
+
+
 def build_native_runtime_health_response() -> dict[str, str]:
     return {
         "status": "ok",
@@ -290,3 +352,10 @@ def _path_check(key: str, path: Path, label: str) -> NativeRuntimeLaunchCheck:
     if path.exists():
         return NativeRuntimeLaunchCheck(key=key, ok=True, detail=f"{label} found at {path}")
     return NativeRuntimeLaunchCheck(key=key, ok=False, detail=f"{label} not found at {path}")
+
+
+def _fetch_tags(api_base: str) -> str:
+    from urllib.request import urlopen
+
+    with urlopen(f"{api_base.rstrip('/')}/api/tags", timeout=2.0) as response:
+        return response.read().decode("utf-8")

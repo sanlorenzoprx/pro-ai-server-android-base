@@ -9,6 +9,7 @@ from pro_ai_server.continue_config import ContinueConfigWriteResult
 from pro_ai_server.diagnostics import DiagnosticsReport
 from pro_ai_server.gateway.ollama_client import OllamaProxyResult
 from pro_ai_server.ide import IdeCli, IdeExtensionStatus, IdeReadiness
+from pro_ai_server.native_runtime import NativeRuntimeProcess, NativeRuntimeReadiness
 from pro_ai_server.ollama import OllamaServerStatus
 from pro_ai_server.release_validation import ReleaseValidationIssue, ReleaseValidationResult
 from pro_ai_server.status import ProAiStatus, StatusItem
@@ -2409,6 +2410,113 @@ def test_native_runtime_plan_reports_ready_inputs(tmp_path):
     assert "Ready: True" in result.output
     assert "OK llama-server" in result.output
     assert "OK model-file" in result.output
+
+
+def test_native_runtime_start_refuses_unready_plan():
+    runner = CliRunner()
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "native-runtime-start",
+            "--profile",
+            "professional",
+            "--models-root",
+            "bundled-models",
+            "--llama-server",
+            "missing-llama-server",
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "Refusing to start native runtime" in result.output
+    assert "Missing llama-server" in result.output
+    assert "Missing model-file" in result.output
+
+
+def test_native_runtime_start_launches_and_waits_when_ready(monkeypatch, tmp_path):
+    runner = CliRunner()
+    executable = tmp_path / "llama-server"
+    models_root = tmp_path / "models"
+    model_file = models_root / "qwen2.5-coder-3b-instruct-q4_k_m.gguf"
+    models_root.mkdir()
+    executable.write_text("binary", encoding="utf-8")
+    model_file.write_text("model", encoding="utf-8")
+    started = []
+
+    def fake_start(launch_plan, force=False):
+        started.append((launch_plan, force))
+        return NativeRuntimeProcess(pid=4321, command=launch_plan.command)
+
+    monkeypatch.setattr(cli, "start_native_runtime_process", fake_start)
+    monkeypatch.setattr(
+        cli,
+        "wait_for_native_runtime_readiness",
+        lambda api_base, timeout_seconds, interval_seconds: NativeRuntimeReadiness(
+            ok=True,
+            attempts=2,
+            detail="runtime responded on /api/tags",
+        ),
+    )
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "native-runtime-start",
+            "--profile",
+            "professional",
+            "--models-root",
+            str(models_root),
+            "--llama-server",
+            str(executable),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert started
+    assert started[0][1] is False
+    assert "Started native runtime process" in result.output
+    assert "PID 4321" in result.output
+    assert "Ready:" in result.output
+
+
+def test_native_runtime_start_exits_when_readiness_fails(monkeypatch, tmp_path):
+    runner = CliRunner()
+    executable = tmp_path / "llama-server"
+    model_file = tmp_path / "qwen2.5-coder-3b-instruct-q4_k_m.gguf"
+    executable.write_text("binary", encoding="utf-8")
+    model_file.write_text("model", encoding="utf-8")
+
+    def fake_start(launch_plan, force=False):
+        return NativeRuntimeProcess(pid=4321, command=launch_plan.command)
+
+    monkeypatch.setattr(cli, "start_native_runtime_process", fake_start)
+    monkeypatch.setattr(
+        cli,
+        "wait_for_native_runtime_readiness",
+        lambda api_base, timeout_seconds, interval_seconds: NativeRuntimeReadiness(
+            ok=False,
+            attempts=3,
+            detail="runtime did not respond",
+        ),
+    )
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "native-runtime-start",
+            "--profile",
+            "professional",
+            "--models-root",
+            str(tmp_path),
+            "--llama-server",
+            str(executable),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "Started native runtime process" in result.output
+    assert "Not ready yet" in result.output
 
 
 def test_setup_tailscale_reports_already_installed_on_host_and_phone(monkeypatch):

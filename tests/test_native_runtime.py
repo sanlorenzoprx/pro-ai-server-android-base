@@ -21,7 +21,9 @@ from pro_ai_server.native_runtime import (
     load_native_runtime_manifest,
     native_runtime_defaults_for_profile,
     render_native_runtime_launch_plan,
+    start_native_runtime_process,
     validate_native_runtime_config,
+    wait_for_native_runtime_readiness,
 )
 from pro_ai_server.models import model_plan_for_profile
 
@@ -306,3 +308,56 @@ def test_render_native_runtime_launch_plan_includes_readiness_and_command():
     assert "Command: llama-server --model" in rendered
     assert "Missing llama-server" in rendered
     assert "Missing model-file" in rendered
+
+
+def test_start_native_runtime_process_rejects_unready_plan_without_force():
+    plan = build_native_runtime_launch_plan(NativeRuntimeConfig(model=make_model()))
+
+    with pytest.raises(ValueError, match="not ready"):
+        start_native_runtime_process(plan)
+
+
+def test_start_native_runtime_process_uses_command_with_force():
+    class FakeProcess:
+        pid = 1234
+
+    calls = []
+
+    def fake_popen(command, **kwargs):
+        calls.append((command, kwargs))
+        return FakeProcess()
+
+    plan = build_native_runtime_launch_plan(NativeRuntimeConfig(model=make_model()))
+
+    process = start_native_runtime_process(plan, force=True, popen=fake_popen)
+
+    assert process.pid == 1234
+    assert calls[0][0][0] == "llama-server"
+    assert calls[0][1]["close_fds"] is True
+
+
+def test_wait_for_native_runtime_readiness_accepts_tags_response():
+    readiness = wait_for_native_runtime_readiness(
+        "http://127.0.0.1:11434",
+        timeout_seconds=0.01,
+        interval_seconds=0,
+        fetch_tags=lambda api_base: '{"models":[]}',
+        sleep=lambda _seconds: None,
+    )
+
+    assert readiness.ok is True
+    assert readiness.attempts == 1
+
+
+def test_wait_for_native_runtime_readiness_reports_timeout():
+    readiness = wait_for_native_runtime_readiness(
+        "http://127.0.0.1:11434",
+        timeout_seconds=-1,
+        interval_seconds=0,
+        fetch_tags=lambda api_base: "{}",
+        sleep=lambda _seconds: None,
+    )
+
+    assert readiness.ok is False
+    assert readiness.attempts == 1
+    assert "models" in readiness.detail

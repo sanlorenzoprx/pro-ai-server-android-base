@@ -16,6 +16,7 @@ Current scaffold:
 - [src/pro_ai_server/native-runtime-manifest.json](/abs/c:/repos/pro-ai-server-android-base/src/pro_ai_server/native-runtime-manifest.json)
 - `pro-ai-server native-runtime-config --profile professional --prefer chat`
 - `pro-ai-server native-runtime-plan --profile professional`
+- `pro-ai-server native-runtime-start --profile professional`
 
 ## Purpose
 
@@ -223,6 +224,19 @@ pro-ai-server native-runtime-plan --profile professional
 
 It checks whether the selected `llama-server` executable and resolved GGUF model
 file are present before any future launch command starts a long-running process.
+
+The controlled startup surface is:
+
+```powershell
+pro-ai-server native-runtime-start --profile professional
+```
+
+Startup must:
+
+- refuse to launch when the plan is not ready unless `--force` is passed
+- start `llama-server` from the rendered command
+- poll the local `/api/tags` endpoint for readiness
+- report the process PID and readiness result
 
 Alternate manifests can be inspected with:
 
