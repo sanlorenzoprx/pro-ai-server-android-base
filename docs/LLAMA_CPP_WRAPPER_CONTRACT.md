@@ -10,6 +10,10 @@ See:
 - [NATIVE_RUNTIME_RESEARCH_NOTE.md](NATIVE_RUNTIME_RESEARCH_NOTE.md)
 - [GATEWAY.md](GATEWAY.md)
 
+Current scaffold:
+
+- [src/pro_ai_server/native_runtime.py](/abs/c:/repos/pro-ai-server-android-base/src/pro_ai_server/native_runtime.py)
+
 ## Purpose
 
 The wrapper is the controlled layer between:
@@ -182,6 +186,16 @@ The wrapper should accept configuration for:
 - temperature and generation defaults later if needed
 
 The host should not need to know raw engine flag details.
+
+The current scaffold includes a profile-to-runtime mapping layer in
+[native_runtime.py](/abs/c:/repos/pro-ai-server-android-base/src/pro_ai_server/native_runtime.py)
+that resolves:
+
+- product model profile
+- preferred runtime role such as `chat` or `autocomplete`
+- stable contract name
+- concrete GGUF filename
+- runtime defaults such as context length and threads
 
 ## Model Identity Rule
 
