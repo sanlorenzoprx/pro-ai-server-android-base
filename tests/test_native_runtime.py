@@ -5,6 +5,7 @@ import pytest
 from pro_ai_server.native_runtime import (
     DEFAULT_NATIVE_RUNTIME_HOST,
     DEFAULT_NATIVE_RUNTIME_PORT,
+    NativeRuntimeProcess,
     NativeRuntimeConfig,
     NativeRuntimeError,
     NativeRuntimeManifest,
@@ -12,18 +13,25 @@ from pro_ai_server.native_runtime import (
     NativeRuntimeProfileDefaults,
     build_llama_server_command,
     build_native_runtime_config_for_model_plan,
+    build_native_runtime_lifecycle_status,
     build_native_runtime_launch_plan,
     build_native_runtime_model,
+    build_native_runtime_state,
     build_native_runtime_chat_response,
     build_native_runtime_generate_response,
     build_native_runtime_health_response,
     build_native_runtime_tags_response,
+    default_native_runtime_state_path,
     load_native_runtime_manifest,
     native_runtime_defaults_for_profile,
+    remove_native_runtime_state,
     render_native_runtime_launch_plan,
+    render_native_runtime_lifecycle_status,
+    stop_native_runtime,
     start_native_runtime_process,
     validate_native_runtime_config,
     wait_for_native_runtime_readiness,
+    write_native_runtime_state,
 )
 from pro_ai_server.models import model_plan_for_profile
 
@@ -361,3 +369,81 @@ def test_wait_for_native_runtime_readiness_reports_timeout():
     assert readiness.ok is False
     assert readiness.attempts == 1
     assert "models" in readiness.detail
+
+
+def test_default_native_runtime_state_path_uses_cache_directory():
+    assert default_native_runtime_state_path(Path("repo")) == (
+        Path("repo") / ".cache" / "pro-ai-server" / "native-runtime-state.json"
+    )
+
+
+def test_write_and_load_native_runtime_state_round_trip(tmp_path):
+    state_path = tmp_path / "native-runtime-state.json"
+    process = NativeRuntimeProcess(pid=1234, command=build_llama_server_command(NativeRuntimeConfig(model=make_model())))
+    config = NativeRuntimeConfig(model=make_model())
+
+    state = build_native_runtime_state(process, config)
+    written = write_native_runtime_state(state, state_path)
+
+    assert written == state_path
+    loaded = build_native_runtime_lifecycle_status(
+        state_path,
+        fetch_tags=lambda api_base: '{"models":[]}',
+        process_exists=lambda pid: True,
+    )
+    assert loaded.state is not None
+    assert loaded.state.pid == 1234
+    assert loaded.process_running is True
+    assert loaded.readiness.ok is True
+
+
+def test_build_native_runtime_lifecycle_status_reports_missing_state(tmp_path):
+    status = build_native_runtime_lifecycle_status(tmp_path / "missing.json")
+
+    assert status.state is None
+    assert status.process_running is None
+    assert status.readiness.ok is False
+
+
+def test_build_native_runtime_lifecycle_status_marks_stale_state(tmp_path):
+    state_path = tmp_path / "native-runtime-state.json"
+    process = NativeRuntimeProcess(pid=1234, command=build_llama_server_command(NativeRuntimeConfig(model=make_model())))
+    state = build_native_runtime_state(process, NativeRuntimeConfig(model=make_model()))
+    write_native_runtime_state(state, state_path)
+
+    status = build_native_runtime_lifecycle_status(
+        state_path,
+        fetch_tags=lambda api_base: "{}",
+        process_exists=lambda pid: False,
+    )
+
+    assert status.stale_state is True
+    rendered = "\n".join(render_native_runtime_lifecycle_status(status))
+    assert "Warning: recorded PID is not running" in rendered
+
+
+def test_stop_native_runtime_terminates_recorded_pid_and_removes_state(tmp_path):
+    state_path = tmp_path / "native-runtime-state.json"
+    process = NativeRuntimeProcess(pid=1234, command=build_llama_server_command(NativeRuntimeConfig(model=make_model())))
+    state = build_native_runtime_state(process, NativeRuntimeConfig(model=make_model()))
+    write_native_runtime_state(state, state_path)
+    terminated = []
+
+    stopped_state, removed = stop_native_runtime(state_path, terminate=lambda pid: terminated.append(pid))
+
+    assert stopped_state is not None
+    assert stopped_state.pid == 1234
+    assert terminated == [1234]
+    assert removed is True
+    assert not state_path.exists()
+
+
+def test_stop_native_runtime_handles_missing_state(tmp_path):
+    state, removed = stop_native_runtime(tmp_path / "missing.json")
+
+    assert state is None
+    assert removed is False
+
+
+def test_remove_native_runtime_state_reports_when_file_is_absent(tmp_path):
+    assert remove_native_runtime_state(tmp_path / "missing.json") is False

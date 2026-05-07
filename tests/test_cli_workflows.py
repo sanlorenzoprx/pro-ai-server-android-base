@@ -4,6 +4,7 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from pro_ai_server import cli
+from pro_ai_server import native_runtime
 from pro_ai_server.android_compatibility import ApkManifest, ApkManifestEntry
 from pro_ai_server.continue_config import ContinueConfigWriteResult
 from pro_ai_server.diagnostics import DiagnosticsReport
@@ -2442,6 +2443,7 @@ def test_native_runtime_start_launches_and_waits_when_ready(monkeypatch, tmp_pat
     models_root.mkdir()
     executable.write_text("binary", encoding="utf-8")
     model_file.write_text("model", encoding="utf-8")
+    state_path = tmp_path / "native-runtime-state.json"
     started = []
 
     def fake_start(launch_plan, force=False):
@@ -2469,6 +2471,8 @@ def test_native_runtime_start_launches_and_waits_when_ready(monkeypatch, tmp_pat
             str(models_root),
             "--llama-server",
             str(executable),
+            "--state-path",
+            str(state_path),
         ],
     )
 
@@ -2477,6 +2481,7 @@ def test_native_runtime_start_launches_and_waits_when_ready(monkeypatch, tmp_pat
     assert started[0][1] is False
     assert "Started native runtime process" in result.output
     assert "PID 4321" in result.output
+    assert state_path.exists()
     assert "Ready:" in result.output
 
 
@@ -2517,6 +2522,85 @@ def test_native_runtime_start_exits_when_readiness_fails(monkeypatch, tmp_path):
     assert result.exit_code == 1
     assert "Started native runtime process" in result.output
     assert "Not ready yet" in result.output
+
+
+def test_native_runtime_status_reports_missing_state(tmp_path):
+    runner = CliRunner()
+
+    result = runner.invoke(cli.app, ["native-runtime-status", "--state-path", str(tmp_path / "missing.json")])
+
+    assert result.exit_code == 0
+    assert "Native runtime status" in result.output
+    assert "State: missing" in result.output
+
+
+def test_native_runtime_status_reports_recorded_state(monkeypatch, tmp_path):
+    runner = CliRunner()
+    state_path = tmp_path / "native-runtime-state.json"
+    state_path.write_text(
+        """{
+          "api_base": "http://127.0.0.1:11434",
+          "command": ["llama-server"],
+          "gguf_path": "model.gguf",
+          "model": "qwen2.5-coder:3b",
+          "pid": 4321,
+          "started_at": "2026-05-07T00:00:00+00:00"
+        }""",
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(
+        cli,
+        "build_native_runtime_lifecycle_status",
+        lambda path: native_runtime.build_native_runtime_lifecycle_status(
+            path,
+            fetch_tags=lambda api_base: '{"models":[]}',
+            process_exists=lambda pid: True,
+        ),
+    )
+
+    result = runner.invoke(cli.app, ["native-runtime-status", "--state-path", str(state_path)])
+
+    assert result.exit_code == 0
+    assert "State: recorded" in result.output
+    assert "PID: 4321" in result.output
+    assert "Process running: True" in result.output
+    assert "Runtime ready: True" in result.output
+
+
+def test_native_runtime_stop_reports_missing_state(tmp_path):
+    runner = CliRunner()
+
+    result = runner.invoke(cli.app, ["native-runtime-stop", "--state-path", str(tmp_path / "missing.json")])
+
+    assert result.exit_code == 0
+    assert "No native runtime state file found" in result.output
+
+
+def test_native_runtime_stop_terminates_recorded_state(monkeypatch, tmp_path):
+    runner = CliRunner()
+    state_path = tmp_path / "native-runtime-state.json"
+    state_path.write_text(
+        """{
+          "api_base": "http://127.0.0.1:11434",
+          "command": ["llama-server"],
+          "gguf_path": "model.gguf",
+          "model": "qwen2.5-coder:3b",
+          "pid": 4321,
+          "started_at": "2026-05-07T00:00:00+00:00"
+        }""",
+        encoding="utf-8",
+    )
+    stopped = []
+
+    monkeypatch.setattr(native_runtime, "_terminate_process", lambda pid: stopped.append(pid))
+
+    result = runner.invoke(cli.app, ["native-runtime-stop", "--state-path", str(state_path)])
+
+    assert result.exit_code == 0
+    assert stopped == [4321]
+    assert "Stopped native runtime process" in result.output
+    assert "Removed state" in result.output
 
 
 def test_setup_tailscale_reports_already_installed_on_host_and_phone(monkeypatch):

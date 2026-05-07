@@ -107,11 +107,17 @@ from pro_ai_server.models import model_plan_for_profile, model_plan_for_ram
 from pro_ai_server.native_runtime import (
     build_llama_server_command,
     build_native_runtime_config_for_model_plan,
+    build_native_runtime_lifecycle_status,
     build_native_runtime_launch_plan,
+    build_native_runtime_state,
+    default_native_runtime_state_path,
     load_native_runtime_manifest,
+    render_native_runtime_lifecycle_status,
     render_native_runtime_launch_plan,
     start_native_runtime_process,
+    stop_native_runtime,
     wait_for_native_runtime_readiness,
+    write_native_runtime_state,
 )
 from pro_ai_server.ollama import (
     DEFAULT_TEST_PROMPT,
@@ -2336,6 +2342,10 @@ def native_runtime_start(
     port: int = typer.Option(11434, help="Native runtime bind port."),
     timeout_seconds: float = typer.Option(30.0, help="Seconds to wait for /api/tags readiness."),
     interval_seconds: float = typer.Option(1.0, help="Seconds between readiness checks."),
+    state_path: Path = typer.Option(
+        default_native_runtime_state_path(),
+        help="Native runtime lifecycle state file.",
+    ),
     force: bool = typer.Option(False, "--force", help="Start even when the launch plan reports missing inputs."),
 ) -> None:
     """Start the native runtime process and wait for the local API."""
@@ -2363,6 +2373,10 @@ def native_runtime_start(
             timeout_seconds=timeout_seconds,
             interval_seconds=interval_seconds,
         )
+        written_state_path = write_native_runtime_state(
+            build_native_runtime_state(process, config),
+            state_path,
+        )
     except ValueError as exc:
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(code=1) from exc
@@ -2372,6 +2386,7 @@ def native_runtime_start(
 
     console.print(f"[green]Started native runtime process:[/green] PID {process.pid}")
     console.print(f"Command: {process.command.render()}")
+    console.print(f"State: {written_state_path}")
     if readiness.ok:
         console.print(f"[green]Ready:[/green] {readiness.detail} after {readiness.attempts} attempt(s).")
     else:
@@ -2379,6 +2394,49 @@ def native_runtime_start(
             f"[yellow]Not ready yet:[/yellow] {readiness.detail} after {readiness.attempts} attempt(s)."
         )
         raise typer.Exit(code=1)
+
+
+@app.command("native-runtime-status")
+def native_runtime_status(
+    state_path: Path = typer.Option(
+        default_native_runtime_state_path(),
+        help="Native runtime lifecycle state file.",
+    ),
+) -> None:
+    """Show recorded native runtime process and API readiness."""
+    status = build_native_runtime_lifecycle_status(state_path)
+    for line in render_native_runtime_lifecycle_status(status):
+        if line == "Runtime ready: True" or line == "Process running: True":
+            console.print(f"[green]{line}[/green]")
+        elif line.startswith("Warning:") or line == "Runtime ready: False" or line == "Process running: False":
+            console.print(f"[yellow]{line}[/yellow]")
+        else:
+            console.print(line)
+
+
+@app.command("native-runtime-stop")
+def native_runtime_stop(
+    state_path: Path = typer.Option(
+        default_native_runtime_state_path(),
+        help="Native runtime lifecycle state file.",
+    ),
+) -> None:
+    """Stop the recorded native runtime process and clear lifecycle state."""
+    try:
+        state, removed = stop_native_runtime(state_path)
+    except OSError as exc:
+        console.print(f"[red]Failed to stop native runtime: {exc}[/red]")
+        raise typer.Exit(code=1) from exc
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    if state is None:
+        console.print("No native runtime state file found.")
+        return
+    console.print(f"[green]Stopped native runtime process:[/green] PID {state.pid}")
+    if removed:
+        console.print(f"Removed state: {state_path}")
 
 
 @app.command()

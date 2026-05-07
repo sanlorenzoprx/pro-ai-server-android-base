@@ -17,6 +17,8 @@ Current scaffold:
 - `pro-ai-server native-runtime-config --profile professional --prefer chat`
 - `pro-ai-server native-runtime-plan --profile professional`
 - `pro-ai-server native-runtime-start --profile professional`
+- `pro-ai-server native-runtime-status`
+- `pro-ai-server native-runtime-stop`
 
 ## Purpose
 
@@ -237,6 +239,29 @@ Startup must:
 - start `llama-server` from the rendered command
 - poll the local `/api/tags` endpoint for readiness
 - report the process PID and readiness result
+
+## Lifecycle State
+
+Native runtime startup writes a local state file:
+
+```text
+.cache/pro-ai-server/native-runtime-state.json
+```
+
+The state file records:
+
+- PID
+- startup command
+- API base
+- model contract name
+- GGUF path
+- start timestamp
+
+`native-runtime-status` reads this state file, checks the recorded process, and
+polls `/api/tags`.
+
+`native-runtime-stop` only targets the recorded PID and removes the state file
+after a stop attempt.
 
 Alternate manifests can be inspected with:
 

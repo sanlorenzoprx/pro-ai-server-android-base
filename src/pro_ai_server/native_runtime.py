@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import time
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from importlib import resources
 from pathlib import Path
 from typing import Any
@@ -13,6 +15,7 @@ from pro_ai_server.models import ModelPlan
 
 DEFAULT_NATIVE_RUNTIME_HOST = "127.0.0.1"
 DEFAULT_NATIVE_RUNTIME_PORT = 11434
+DEFAULT_NATIVE_RUNTIME_STATE_PATH = Path(".cache") / "pro-ai-server" / "native-runtime-state.json"
 
 
 @dataclass(frozen=True)
@@ -80,6 +83,34 @@ class NativeRuntimeReadiness:
     ok: bool
     attempts: int
     detail: str
+
+
+@dataclass(frozen=True)
+class NativeRuntimeState:
+    pid: int
+    command: tuple[str, ...]
+    api_base: str
+    model: str
+    gguf_path: Path
+    started_at: str
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "pid": self.pid,
+            "command": list(self.command),
+            "api_base": self.api_base,
+            "model": self.model,
+            "gguf_path": str(self.gguf_path),
+            "started_at": self.started_at,
+        }
+
+
+@dataclass(frozen=True)
+class NativeRuntimeLifecycleStatus:
+    state: NativeRuntimeState | None
+    process_running: bool | None
+    readiness: NativeRuntimeReadiness
+    stale_state: bool = False
 
 
 @dataclass(frozen=True)
@@ -301,6 +332,127 @@ def wait_for_native_runtime_readiness(
         sleep(max(0.0, interval_seconds))
 
 
+def default_native_runtime_state_path(root: Path = Path(".")) -> Path:
+    return root / DEFAULT_NATIVE_RUNTIME_STATE_PATH
+
+
+def build_native_runtime_state(
+    process: NativeRuntimeProcess,
+    config: NativeRuntimeConfig,
+    *,
+    now: Any | None = None,
+) -> NativeRuntimeState:
+    current_time = now or datetime.now(timezone.utc)
+    started_at = current_time.isoformat()
+    return NativeRuntimeState(
+        pid=process.pid,
+        command=process.command.command,
+        api_base=config.api_base,
+        model=config.model.contract_name,
+        gguf_path=config.model.gguf_path,
+        started_at=started_at,
+    )
+
+
+def write_native_runtime_state(state: NativeRuntimeState, path: Path = DEFAULT_NATIVE_RUNTIME_STATE_PATH) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(state.to_dict(), indent=2, sort_keys=True), encoding="utf-8")
+    return path
+
+
+def load_native_runtime_state(path: Path = DEFAULT_NATIVE_RUNTIME_STATE_PATH) -> NativeRuntimeState | None:
+    if not path.exists():
+        return None
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    return NativeRuntimeState(
+        pid=int(payload["pid"]),
+        command=tuple(str(part) for part in payload.get("command", ())),
+        api_base=str(payload["api_base"]),
+        model=str(payload["model"]),
+        gguf_path=Path(str(payload["gguf_path"])),
+        started_at=str(payload["started_at"]),
+    )
+
+
+def remove_native_runtime_state(path: Path = DEFAULT_NATIVE_RUNTIME_STATE_PATH) -> bool:
+    if not path.exists():
+        return False
+    path.unlink()
+    return True
+
+
+def is_process_running(pid: int, *, exists: Any | None = None) -> bool:
+    process_exists = exists or _process_exists
+    return bool(process_exists(pid))
+
+
+def build_native_runtime_lifecycle_status(
+    state_path: Path = DEFAULT_NATIVE_RUNTIME_STATE_PATH,
+    *,
+    fetch_tags: Any | None = None,
+    process_exists: Any | None = None,
+) -> NativeRuntimeLifecycleStatus:
+    state = load_native_runtime_state(state_path)
+    if state is None:
+        return NativeRuntimeLifecycleStatus(
+            state=None,
+            process_running=None,
+            readiness=NativeRuntimeReadiness(ok=False, attempts=0, detail="no native runtime state file"),
+        )
+    running = is_process_running(state.pid, exists=process_exists)
+    readiness = wait_for_native_runtime_readiness(
+        state.api_base,
+        timeout_seconds=0,
+        interval_seconds=0,
+        fetch_tags=fetch_tags,
+        sleep=lambda _seconds: None,
+    )
+    return NativeRuntimeLifecycleStatus(
+        state=state,
+        process_running=running,
+        readiness=readiness,
+        stale_state=not running,
+    )
+
+
+def render_native_runtime_lifecycle_status(status: NativeRuntimeLifecycleStatus) -> tuple[str, ...]:
+    lines = ["Native runtime status"]
+    if status.state is None:
+        lines.append("State: missing")
+        lines.append(f"Readiness: {status.readiness.detail}")
+        return tuple(lines)
+    lines.extend(
+        (
+            "State: recorded",
+            f"PID: {status.state.pid}",
+            f"Process running: {status.process_running}",
+            f"Model: {status.state.model}",
+            f"API base: {status.state.api_base}",
+            f"GGUF path: {status.state.gguf_path}",
+            f"Started at: {status.state.started_at}",
+            f"Runtime ready: {status.readiness.ok}",
+            f"Readiness detail: {status.readiness.detail}",
+        )
+    )
+    if status.stale_state:
+        lines.append("Warning: recorded PID is not running; state is stale.")
+    return tuple(lines)
+
+
+def stop_native_runtime(
+    state_path: Path = DEFAULT_NATIVE_RUNTIME_STATE_PATH,
+    *,
+    terminate: Any | None = None,
+) -> tuple[NativeRuntimeState | None, bool]:
+    state = load_native_runtime_state(state_path)
+    if state is None:
+        return None, False
+    terminator = terminate or _terminate_process
+    terminator(state.pid)
+    removed = remove_native_runtime_state(state_path)
+    return state, removed
+
+
 def build_native_runtime_health_response() -> dict[str, str]:
     return {
         "status": "ok",
@@ -359,3 +511,19 @@ def _fetch_tags(api_base: str) -> str:
 
     with urlopen(f"{api_base.rstrip('/')}/api/tags", timeout=2.0) as response:
         return response.read().decode("utf-8")
+
+
+def _process_exists(pid: int) -> bool:
+    if pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return False
+    return True
+
+
+def _terminate_process(pid: int) -> None:
+    if pid <= 0:
+        raise ValueError("Native runtime PID must be positive.")
+    os.kill(pid, 15)
