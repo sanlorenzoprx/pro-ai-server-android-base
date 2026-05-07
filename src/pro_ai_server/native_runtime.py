@@ -50,6 +50,24 @@ class NativeRuntimeServerCommand:
 
 
 @dataclass(frozen=True)
+class NativeRuntimeLaunchCheck:
+    key: str
+    ok: bool
+    detail: str
+
+
+@dataclass(frozen=True)
+class NativeRuntimeLaunchPlan:
+    config: NativeRuntimeConfig
+    command: NativeRuntimeServerCommand
+    checks: tuple[NativeRuntimeLaunchCheck, ...]
+
+    @property
+    def ready(self) -> bool:
+        return all(check.ok for check in self.checks)
+
+
+@dataclass(frozen=True)
 class NativeRuntimeError:
     error: str
     message: str
@@ -193,6 +211,34 @@ def build_llama_server_command(
     return NativeRuntimeServerCommand(executable=executable, args=tuple(args))
 
 
+def build_native_runtime_launch_plan(
+    config: NativeRuntimeConfig,
+    *,
+    executable: Path = Path("llama-server"),
+) -> NativeRuntimeLaunchPlan:
+    command = build_llama_server_command(config, executable=executable)
+    checks = (
+        _path_check("llama-server", executable, "llama.cpp server executable"),
+        _path_check("model-file", config.model.gguf_path, "GGUF model file"),
+    )
+    return NativeRuntimeLaunchPlan(config=config, command=command, checks=checks)
+
+
+def render_native_runtime_launch_plan(plan: NativeRuntimeLaunchPlan) -> tuple[str, ...]:
+    lines = [
+        "Native runtime launch plan",
+        f"Ready: {plan.ready}",
+        f"Model: {plan.config.model.contract_name}",
+        f"API base: {plan.config.api_base}",
+        f"Command: {plan.command.render()}",
+    ]
+    lines.extend(
+        f"- {'OK' if check.ok else 'Missing'} {check.key}: {check.detail}"
+        for check in plan.checks
+    )
+    return tuple(lines)
+
+
 def build_native_runtime_health_response() -> dict[str, str]:
     return {
         "status": "ok",
@@ -238,3 +284,9 @@ def _profile_defaults_from_mapping(defaults: dict[str, Any]) -> NativeRuntimePro
     if profile_defaults.gpu_layers < 0:
         raise ValueError("Native runtime profile GPU layers must not be negative.")
     return profile_defaults
+
+
+def _path_check(key: str, path: Path, label: str) -> NativeRuntimeLaunchCheck:
+    if path.exists():
+        return NativeRuntimeLaunchCheck(key=key, ok=True, detail=f"{label} found at {path}")
+    return NativeRuntimeLaunchCheck(key=key, ok=False, detail=f"{label} not found at {path}")

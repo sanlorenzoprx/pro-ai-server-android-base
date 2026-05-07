@@ -107,7 +107,9 @@ from pro_ai_server.models import model_plan_for_profile, model_plan_for_ram
 from pro_ai_server.native_runtime import (
     build_llama_server_command,
     build_native_runtime_config_for_model_plan,
+    build_native_runtime_launch_plan,
     load_native_runtime_manifest,
+    render_native_runtime_launch_plan,
 )
 from pro_ai_server.ollama import (
     DEFAULT_TEST_PROMPT,
@@ -2280,6 +2282,44 @@ def native_runtime_config(
     console.print(f"Threads: {config.threads}")
     console.print(f"GPU layers: {config.gpu_layers}")
     console.print(f"Startup command: {command.render()}")
+
+
+@app.command("native-runtime-plan")
+def native_runtime_plan(
+    profile_name: str = typer.Option("professional", "--profile", help="Model profile to resolve."),
+    ram_gb: float | None = typer.Option(None, help="Optional RAM value used to select a profile."),
+    prefer: str = typer.Option("chat", help="Resolve the chat or autocomplete runtime lane."),
+    models_root: Path = typer.Option(Path("models"), help="Root directory containing GGUF model files."),
+    manifest_path: Path | None = typer.Option(None, "--manifest", help="Optional native runtime manifest JSON path."),
+    llama_server: Path = typer.Option(Path("llama-server"), help="llama.cpp server executable path."),
+    host: str = typer.Option("127.0.0.1", help="Native runtime bind host."),
+    port: int = typer.Option(11434, help="Native runtime bind port."),
+) -> None:
+    """Render a native runtime launch plan without starting the engine."""
+    try:
+        plan = model_plan_for_ram(ram_gb) if ram_gb is not None else model_plan_for_profile(profile_name)
+        manifest = load_native_runtime_manifest(manifest_path)
+        config = build_native_runtime_config_for_model_plan(
+            plan,
+            models_root=models_root,
+            prefer=prefer,
+            host=host,
+            port=port,
+            manifest=manifest,
+        )
+        launch_plan = build_native_runtime_launch_plan(config, executable=llama_server)
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    console.print(f"Engine: {manifest.engine}")
+    for line in render_native_runtime_launch_plan(launch_plan):
+        if line.startswith("- OK "):
+            console.print(f"[green]{line}[/green]")
+        elif line.startswith("- Missing "):
+            console.print(f"[yellow]{line}[/yellow]")
+        else:
+            console.print(line)
 
 
 @app.command()

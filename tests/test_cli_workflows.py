@@ -2358,6 +2358,59 @@ def test_native_runtime_config_rejects_invalid_preference():
     assert "prefer value must be 'chat' or 'autocomplete'" in result.output
 
 
+def test_native_runtime_plan_reports_missing_inputs():
+    runner = CliRunner()
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "native-runtime-plan",
+            "--profile",
+            "professional",
+            "--models-root",
+            "bundled-models",
+            "--llama-server",
+            "missing-llama-server",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Engine: llama.cpp" in result.output
+    assert "Native runtime launch plan" in result.output
+    assert "Ready: False" in result.output
+    assert "Model: qwen2.5-coder:3b" in result.output
+    assert "Missing llama-server" in result.output
+    assert "Missing model-file" in result.output
+
+
+def test_native_runtime_plan_reports_ready_inputs(tmp_path):
+    runner = CliRunner()
+    executable = tmp_path / "llama-server"
+    models_root = tmp_path / "models"
+    model_file = models_root / "qwen2.5-coder-3b-instruct-q4_k_m.gguf"
+    models_root.mkdir()
+    executable.write_text("binary", encoding="utf-8")
+    model_file.write_text("model", encoding="utf-8")
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "native-runtime-plan",
+            "--profile",
+            "professional",
+            "--models-root",
+            str(models_root),
+            "--llama-server",
+            str(executable),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Ready: True" in result.output
+    assert "OK llama-server" in result.output
+    assert "OK model-file" in result.output
+
+
 def test_setup_tailscale_reports_already_installed_on_host_and_phone(monkeypatch):
     runner = CliRunner()
 

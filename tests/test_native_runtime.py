@@ -12,6 +12,7 @@ from pro_ai_server.native_runtime import (
     NativeRuntimeProfileDefaults,
     build_llama_server_command,
     build_native_runtime_config_for_model_plan,
+    build_native_runtime_launch_plan,
     build_native_runtime_model,
     build_native_runtime_chat_response,
     build_native_runtime_generate_response,
@@ -19,6 +20,7 @@ from pro_ai_server.native_runtime import (
     build_native_runtime_tags_response,
     load_native_runtime_manifest,
     native_runtime_defaults_for_profile,
+    render_native_runtime_launch_plan,
     validate_native_runtime_config,
 )
 from pro_ai_server.models import model_plan_for_profile
@@ -266,3 +268,41 @@ def test_build_llama_server_command_includes_gpu_layers_when_enabled():
 
     assert "--n-gpu-layers" in command.args
     assert command.args[-1] == "8"
+
+
+def test_build_native_runtime_launch_plan_marks_missing_inputs():
+    config = NativeRuntimeConfig(model=make_model())
+
+    plan = build_native_runtime_launch_plan(config, executable=Path("missing-llama-server"))
+
+    assert plan.ready is False
+    assert [check.key for check in plan.checks] == ["llama-server", "model-file"]
+    assert all(check.ok is False for check in plan.checks)
+
+
+def test_build_native_runtime_launch_plan_marks_ready_inputs(tmp_path):
+    executable = tmp_path / "llama-server"
+    model_file = tmp_path / "model.gguf"
+    executable.write_text("binary", encoding="utf-8")
+    model_file.write_text("model", encoding="utf-8")
+    config = NativeRuntimeConfig(
+        model=NativeRuntimeModel(contract_name="qwen2.5-coder:1.5b", gguf_path=model_file)
+    )
+
+    plan = build_native_runtime_launch_plan(config, executable=executable)
+
+    assert plan.ready is True
+    assert all(check.ok for check in plan.checks)
+
+
+def test_render_native_runtime_launch_plan_includes_readiness_and_command():
+    plan = build_native_runtime_launch_plan(NativeRuntimeConfig(model=make_model()))
+
+    rendered = "\n".join(render_native_runtime_launch_plan(plan))
+
+    assert "Native runtime launch plan" in rendered
+    assert "Ready: False" in rendered
+    assert "Model: qwen2.5-coder:1.5b" in rendered
+    assert "Command: llama-server --model" in rendered
+    assert "Missing llama-server" in rendered
+    assert "Missing model-file" in rendered

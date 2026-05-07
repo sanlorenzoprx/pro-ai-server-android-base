@@ -15,6 +15,7 @@ Current scaffold:
 - [src/pro_ai_server/native_runtime.py](/abs/c:/repos/pro-ai-server-android-base/src/pro_ai_server/native_runtime.py)
 - [src/pro_ai_server/native-runtime-manifest.json](/abs/c:/repos/pro-ai-server-android-base/src/pro_ai_server/native-runtime-manifest.json)
 - `pro-ai-server native-runtime-config --profile professional --prefer chat`
+- `pro-ai-server native-runtime-plan --profile professional`
 
 ## Purpose
 
@@ -213,6 +214,15 @@ pro-ai-server native-runtime-config --profile professional --prefer chat
 It also renders the planned `llama-server` startup command without launching the
 engine. The command builder follows the official `llama-server` direction from
 `llama.cpp`, where the HTTP server is started with a GGUF model and bind port.
+
+The current launch-plan inspection surface is:
+
+```powershell
+pro-ai-server native-runtime-plan --profile professional
+```
+
+It checks whether the selected `llama-server` executable and resolved GGUF model
+file are present before any future launch command starts a long-running process.
 
 Alternate manifests can be inspected with:
 
