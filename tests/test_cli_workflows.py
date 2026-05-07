@@ -2795,6 +2795,77 @@ def test_native_runtime_android_start_executes_adb_commands(monkeypatch):
     assert "Remote PID file" in result.output
 
 
+def test_native_runtime_android_status_prints_plan_without_execute(monkeypatch):
+    runner = CliRunner()
+
+    monkeypatch.setattr(cli, "resolve_adb", lambda: "adb")
+    monkeypatch.setattr(cli, "select_device_serial", lambda adb, serial: "ABC123")
+
+    result = runner.invoke(cli.app, ["native-runtime-android-status"])
+
+    assert result.exit_code == 0
+    assert "Native Android runtime status plan" in result.output
+    assert "Plan only" in result.output
+
+
+def test_native_runtime_android_status_executes_adb_commands(monkeypatch):
+    runner = CliRunner()
+    commands = []
+
+    monkeypatch.setattr(cli, "resolve_adb", lambda: "adb")
+    monkeypatch.setattr(cli, "select_device_serial", lambda adb, serial: "ABC123")
+    monkeypatch.setattr(cli, "run_command", lambda command: commands.append(command) or "running:1234")
+
+    result = runner.invoke(cli.app, ["native-runtime-android-status", "--execute"])
+
+    assert result.exit_code == 0
+    assert any(command[:4] == ["adb", "-s", "ABC123", "shell"] for command in commands)
+    assert any(command == ["adb", "-s", "ABC123", "forward", "tcp:11434", "tcp:11434"] for command in commands)
+    assert "running:1234" in result.output
+
+
+def test_native_runtime_android_stop_prints_plan_without_execute(monkeypatch):
+    runner = CliRunner()
+
+    monkeypatch.setattr(cli, "resolve_adb", lambda: "adb")
+    monkeypatch.setattr(cli, "select_device_serial", lambda adb, serial: "ABC123")
+
+    result = runner.invoke(cli.app, ["native-runtime-android-stop"])
+
+    assert result.exit_code == 0
+    assert "Native Android runtime stop plan" in result.output
+    assert "Plan only" in result.output
+
+
+def test_native_runtime_android_stop_refuses_execute_without_yes(monkeypatch):
+    runner = CliRunner()
+
+    monkeypatch.setattr(cli, "resolve_adb", lambda: "adb")
+    monkeypatch.setattr(cli, "select_device_serial", lambda adb, serial: "ABC123")
+
+    result = runner.invoke(cli.app, ["native-runtime-android-stop", "--execute"])
+
+    assert result.exit_code == 1
+    assert "without --yes" in result.output
+
+
+def test_native_runtime_android_stop_executes_adb_commands(monkeypatch):
+    runner = CliRunner()
+    commands = []
+
+    monkeypatch.setattr(cli, "resolve_adb", lambda: "adb")
+    monkeypatch.setattr(cli, "select_device_serial", lambda adb, serial: "ABC123")
+    monkeypatch.setattr(cli, "run_command", lambda command: commands.append(command) or "stopped:1234")
+
+    result = runner.invoke(cli.app, ["native-runtime-android-stop", "--execute", "--yes"])
+
+    assert result.exit_code == 0
+    assert any(command[:4] == ["adb", "-s", "ABC123", "shell"] for command in commands)
+    assert any(command == ["adb", "-s", "ABC123", "forward", "--remove", "tcp:11434"] for command in commands)
+    assert "stopped:1234" in result.output
+    assert "Requested native Android runtime stop" in result.output
+
+
 def test_setup_tailscale_reports_already_installed_on_host_and_phone(monkeypatch):
     runner = CliRunner()
 

@@ -40,6 +40,21 @@ class NativeAndroidRuntimeStartPlan:
     remote_start_shell: str
 
 
+@dataclass(frozen=True)
+class NativeAndroidRuntimeStatusPlan:
+    layout: NativeAndroidRuntimeLayout
+    commands: tuple[Command, ...]
+    remote_pid_file: PurePosixPath
+    remote_log_file: PurePosixPath
+
+
+@dataclass(frozen=True)
+class NativeAndroidRuntimeStopPlan:
+    layout: NativeAndroidRuntimeLayout
+    commands: tuple[Command, ...]
+    remote_pid_file: PurePosixPath
+
+
 def build_native_android_runtime_layout(
     config: NativeRuntimeConfig,
     *,
@@ -126,6 +141,44 @@ def build_native_android_runtime_start_plan(
     )
 
 
+def build_native_android_runtime_status_plan(
+    config: NativeRuntimeConfig,
+    *,
+    remote_root: str = DEFAULT_ANDROID_NATIVE_RUNTIME_ROOT,
+    serial: str | None = None,
+) -> NativeAndroidRuntimeStatusPlan:
+    layout = build_native_android_runtime_layout(config, remote_root=remote_root)
+    remote_pid_file = layout.state_dir / "llama-server.pid"
+    remote_log_file = layout.logs_dir / "llama-server.log"
+    return NativeAndroidRuntimeStatusPlan(
+        layout=layout,
+        commands=(
+            _adb_command(("shell", _remote_status_shell(remote_pid_file, remote_log_file)), serial),
+            _adb_command(("forward", f"tcp:{config.port}", f"tcp:{config.port}"), serial),
+        ),
+        remote_pid_file=remote_pid_file,
+        remote_log_file=remote_log_file,
+    )
+
+
+def build_native_android_runtime_stop_plan(
+    config: NativeRuntimeConfig,
+    *,
+    remote_root: str = DEFAULT_ANDROID_NATIVE_RUNTIME_ROOT,
+    serial: str | None = None,
+) -> NativeAndroidRuntimeStopPlan:
+    layout = build_native_android_runtime_layout(config, remote_root=remote_root)
+    remote_pid_file = layout.state_dir / "llama-server.pid"
+    return NativeAndroidRuntimeStopPlan(
+        layout=layout,
+        commands=(
+            _adb_command(("shell", _remote_stop_shell(remote_pid_file)), serial),
+            _adb_command(("forward", "--remove", f"tcp:{config.port}"), serial),
+        ),
+        remote_pid_file=remote_pid_file,
+    )
+
+
 def render_native_android_runtime_install_plan(plan: NativeAndroidRuntimeInstallPlan) -> tuple[str, ...]:
     lines = [
         "Native Android runtime install plan",
@@ -138,6 +191,29 @@ def render_native_android_runtime_install_plan(plan: NativeAndroidRuntimeInstall
     lines.extend(" ".join(command) for command in plan.commands)
     lines.append("Instructions:")
     lines.extend(f"- {instruction}" for instruction in plan.instructions)
+    return tuple(lines)
+
+
+def render_native_android_runtime_status_plan(plan: NativeAndroidRuntimeStatusPlan) -> tuple[str, ...]:
+    lines = [
+        "Native Android runtime status plan",
+        f"Remote root: {plan.layout.root}",
+        f"Remote PID file: {plan.remote_pid_file}",
+        f"Remote log file: {plan.remote_log_file}",
+        "Commands:",
+    ]
+    lines.extend(" ".join(command) for command in plan.commands)
+    return tuple(lines)
+
+
+def render_native_android_runtime_stop_plan(plan: NativeAndroidRuntimeStopPlan) -> tuple[str, ...]:
+    lines = [
+        "Native Android runtime stop plan",
+        f"Remote root: {plan.layout.root}",
+        f"Remote PID file: {plan.remote_pid_file}",
+        "Commands:",
+    ]
+    lines.extend(" ".join(command) for command in plan.commands)
     return tuple(lines)
 
 
@@ -185,4 +261,25 @@ def _remote_start_shell(
         f"mkdir -p {layout.state_dir} {layout.logs_dir} && "
         f"nohup {command} > {remote_log_file} 2>&1 & "
         f"echo $! > {remote_pid_file}"
+    )
+
+
+def _remote_status_shell(remote_pid_file: PurePosixPath, remote_log_file: PurePosixPath) -> str:
+    return (
+        f"if [ -f {remote_pid_file} ]; then "
+        f"pid=$(cat {remote_pid_file}); "
+        f"if kill -0 $pid 2>/dev/null; then echo running:$pid; else echo stale:$pid; fi; "
+        f"else echo missing; fi; "
+        f"tail -n 20 {remote_log_file} 2>/dev/null || true"
+    )
+
+
+def _remote_stop_shell(remote_pid_file: PurePosixPath) -> str:
+    return (
+        f"if [ -f {remote_pid_file} ]; then "
+        f"pid=$(cat {remote_pid_file}); "
+        f"kill $pid 2>/dev/null || true; "
+        f"rm -f {remote_pid_file}; "
+        f"echo stopped:$pid; "
+        f"else echo missing; fi"
     )

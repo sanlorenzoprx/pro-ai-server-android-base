@@ -6,8 +6,12 @@ from pro_ai_server.native_android import (
     build_native_android_runtime_install_plan,
     build_native_android_runtime_layout,
     build_native_android_runtime_start_plan,
+    build_native_android_runtime_status_plan,
+    build_native_android_runtime_stop_plan,
     render_native_android_runtime_install_plan,
     render_native_android_runtime_start_plan,
+    render_native_android_runtime_status_plan,
+    render_native_android_runtime_stop_plan,
 )
 from pro_ai_server.native_runtime import build_native_runtime_config_for_model_plan, load_native_runtime_manifest
 
@@ -112,3 +116,47 @@ def test_render_native_android_runtime_start_plan_is_operator_readable():
     assert "Remote PID file:" in rendered
     assert "Remote log file:" in rendered
     assert "Commands:" in rendered
+
+
+def test_build_native_android_runtime_status_plan_checks_remote_pid_and_log():
+    config = build_native_runtime_config_for_model_plan(model_plan_for_profile("professional"))
+
+    plan = build_native_android_runtime_status_plan(
+        config,
+        remote_root="/data/local/tmp/pro-ai",
+        serial="ABC123",
+    )
+
+    assert plan.commands[0][0:4] == ("adb", "-s", "ABC123", "shell")
+    assert "kill -0 $pid" in plan.commands[0][4]
+    assert "tail -n 20 /data/local/tmp/pro-ai/logs/llama-server.log" in plan.commands[0][4]
+    assert plan.commands[1] == ("adb", "-s", "ABC123", "forward", "tcp:11434", "tcp:11434")
+
+
+def test_build_native_android_runtime_stop_plan_stops_recorded_pid_and_removes_forward():
+    config = build_native_runtime_config_for_model_plan(model_plan_for_profile("professional"))
+
+    plan = build_native_android_runtime_stop_plan(
+        config,
+        remote_root="/data/local/tmp/pro-ai",
+        serial="ABC123",
+    )
+
+    assert plan.commands[0][0:4] == ("adb", "-s", "ABC123", "shell")
+    assert "kill $pid" in plan.commands[0][4]
+    assert "rm -f /data/local/tmp/pro-ai/state/llama-server.pid" in plan.commands[0][4]
+    assert plan.commands[1] == ("adb", "-s", "ABC123", "forward", "--remove", "tcp:11434")
+
+
+def test_render_native_android_runtime_status_and_stop_plans_are_operator_readable():
+    config = build_native_runtime_config_for_model_plan(model_plan_for_profile("professional"))
+    status_plan = build_native_android_runtime_status_plan(config)
+    stop_plan = build_native_android_runtime_stop_plan(config)
+
+    rendered_status = "\n".join(render_native_android_runtime_status_plan(status_plan))
+    rendered_stop = "\n".join(render_native_android_runtime_stop_plan(stop_plan))
+
+    assert "Native Android runtime status plan" in rendered_status
+    assert "Remote log file:" in rendered_status
+    assert "Native Android runtime stop plan" in rendered_stop
+    assert "Remote PID file:" in rendered_stop

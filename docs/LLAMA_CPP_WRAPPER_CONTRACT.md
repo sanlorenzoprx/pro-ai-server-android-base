@@ -23,6 +23,8 @@ Current scaffold:
 - `pro-ai-server native-runtime-android-plan`
 - `pro-ai-server native-runtime-android-install`
 - `pro-ai-server native-runtime-android-start`
+- `pro-ai-server native-runtime-android-status`
+- `pro-ai-server native-runtime-android-stop`
 
 ## Purpose
 
@@ -297,6 +299,12 @@ runtime binary executable, and requests `adb forward tcp:11434 tcp:11434`.
 `native-runtime-android-start --execute --yes` requests a remote `llama-server`
 start under the same Android layout, writes a remote PID file, writes logs, and
 requests `adb forward tcp:11434 tcp:11434`.
+
+`native-runtime-android-status --execute` checks the remote PID file, process
+state, recent logs, and requested ADB forward.
+
+`native-runtime-android-stop --execute --yes` stops only the PID recorded in the
+remote PID file, removes that PID file, and removes the host ADB forward.
 
 Alternate manifests can be inspected with:
 
