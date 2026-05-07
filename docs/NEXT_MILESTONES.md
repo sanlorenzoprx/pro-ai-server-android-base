@@ -83,6 +83,7 @@ Current status:
 
 - Framed
 - Not fully specified yet
+- First wrapper contract drafted in [LLAMA_CPP_WRAPPER_CONTRACT.md](LLAMA_CPP_WRAPPER_CONTRACT.md)
 
 Expected output:
 

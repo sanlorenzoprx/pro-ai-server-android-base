@@ -251,6 +251,7 @@ The product should not require the host to care whether the phone uses:
 - choose `llama.cpp` as the likely engine
 - define model storage and lifecycle expectations
 - define the local API shim that preserves `/api/tags`, `/api/generate`, and `/api/chat`
+- define the wrapper boundary in [LLAMA_CPP_WRAPPER_CONTRACT.md](LLAMA_CPP_WRAPPER_CONTRACT.md)
 
 ### Stage 3: run parallel runtime lanes
 
