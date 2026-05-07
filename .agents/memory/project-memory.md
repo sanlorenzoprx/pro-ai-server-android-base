@@ -16,6 +16,7 @@ Agentic Codeflow direction:
 - Treat the AI layer as a second codebase.
 - Use a Plan, Implement, Validate loop.
 - Use the CodeFlow Build Bridge to convert phases into concrete build tickets before runtime work starts.
+- Use a Research Pause before major new directions so we adapt proven external patterns before writing big tickets.
 - Define endpoint, config, schema, and validation contracts before implementation.
 - Store plans, reports, mistakes, and rules in version control.
 - Prefer small, tested runtime changes staged by phase.
@@ -28,6 +29,7 @@ Official product name for this clone:
 Build bridge rule:
 
 - No major runtime implementation begins until a matching build ticket and any required contracts exist in `.agents/`.
+- No major new direction should skip `docs/RESEARCH_PAUSE_SOP.md` when similar external work likely exists.
 
 Default validation:
 

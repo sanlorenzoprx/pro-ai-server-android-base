@@ -26,11 +26,12 @@ roadmap / PRD
 ## Rules
 
 1. No major runtime work begins without a matching build ticket.
-2. Each build ticket names target files, dependencies, validation, and rollback.
-3. Contract-impacting work must reference `.agents/contracts/`.
-4. One branch or PR should map to one build ticket when practical.
-5. Validation evidence must be recorded before a ticket is considered done.
-6. Phase closeout happens only after all tickets, contracts, reports, and smoke tests are complete.
+2. Major new directions should complete a Research Pause first when similar external work likely exists.
+3. Each build ticket names target files, dependencies, validation, and rollback.
+4. Contract-impacting work must reference `.agents/contracts/`.
+5. One branch or PR should map to one build ticket when practical.
+6. Validation evidence must be recorded before a ticket is considered done.
+7. Phase closeout happens only after all tickets, contracts, reports, and smoke tests are complete.
 
 ## Pro CodeFlow Server Adaptation
 
@@ -43,4 +44,6 @@ For Pro CodeFlow Server, contracts usually describe:
 - index/RAG storage shape
 - agent report formats
 - network exposure and privacy boundaries
+
+Research Pause guidance lives in `docs/RESEARCH_PAUSE_SOP.md`.
 

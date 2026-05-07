@@ -43,6 +43,10 @@ Current support promise:
 
 The AI workflow layer lives in `.agents/`, `.codex/`, and `.cursor/`. These folders store project memory, PRDs, implementation plans, validation reports, mistake records, workflow definitions, Codex command templates, and Cursor rules so agents can follow a repeatable Plan, Implement, Validate, Report, and Improve loop.
 
+Top-level reasoning rule:
+
+- Before major new directions or subsystem changes, run a Research Pause and review similar external projects first. See [docs/RESEARCH_PAUSE_SOP.md](docs/RESEARCH_PAUSE_SOP.md).
+
 ## Gateway Preview
 
 The gateway adds a dependency-light local gateway foundation for future Continue/Cursor routing:
