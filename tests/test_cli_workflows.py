@@ -2610,6 +2610,33 @@ def test_native_runtime_stop_terminates_recorded_state(monkeypatch, tmp_path):
     assert "Removed state" in result.output
 
 
+def test_native_runtime_doctor_reports_preflight(tmp_path):
+    runner = CliRunner()
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "native-runtime-doctor",
+            "--profile",
+            "professional",
+            "--models-root",
+            str(tmp_path / "models"),
+            "--llama-server",
+            str(tmp_path / "llama-server"),
+            "--state-path",
+            str(tmp_path / "native-runtime-state.json"),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Native runtime doctor" in result.output
+    assert "Engine: llama.cpp" in result.output
+    assert "Profile ready: False" in result.output
+    assert "Lifecycle ready: False" in result.output
+    assert "Missing llama-server" in result.output
+    assert "State: missing" in result.output
+
+
 def test_setup_tailscale_reports_already_installed_on_host_and_phone(monkeypatch):
     runner = CliRunner()
 

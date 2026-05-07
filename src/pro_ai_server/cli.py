@@ -107,12 +107,14 @@ from pro_ai_server.models import model_plan_for_profile, model_plan_for_ram
 from pro_ai_server.native_runtime import (
     build_llama_server_command,
     build_native_runtime_config_for_model_plan,
+    build_native_runtime_doctor_report,
     build_native_runtime_lifecycle_status,
     build_native_runtime_launch_plan,
     build_native_runtime_state,
     default_native_runtime_state_path,
     load_native_runtime_manifest,
     render_native_runtime_lifecycle_status,
+    render_native_runtime_doctor_report,
     render_native_runtime_launch_plan,
     start_native_runtime_process,
     stop_native_runtime,
@@ -2437,6 +2439,47 @@ def native_runtime_stop(
     console.print(f"[green]Stopped native runtime process:[/green] PID {state.pid}")
     if removed:
         console.print(f"Removed state: {state_path}")
+
+
+@app.command("native-runtime-doctor")
+def native_runtime_doctor(
+    profile_name: str = typer.Option("professional", "--profile", help="Model profile to resolve."),
+    ram_gb: float | None = typer.Option(None, help="Optional RAM value used to select a profile."),
+    prefer: str = typer.Option("chat", help="Resolve the chat or autocomplete runtime lane."),
+    models_root: Path = typer.Option(Path("models"), help="Root directory containing GGUF model files."),
+    manifest_path: Path | None = typer.Option(None, "--manifest", help="Optional native runtime manifest JSON path."),
+    llama_server: Path = typer.Option(Path("llama-server"), help="llama.cpp server executable path."),
+    host: str = typer.Option("127.0.0.1", help="Native runtime bind host."),
+    port: int = typer.Option(11434, help="Native runtime bind port."),
+    state_path: Path = typer.Option(
+        default_native_runtime_state_path(),
+        help="Native runtime lifecycle state file.",
+    ),
+) -> None:
+    """Run a native runtime preflight over config, files, state, and API readiness."""
+    try:
+        plan = model_plan_for_ram(ram_gb) if ram_gb is not None else model_plan_for_profile(profile_name)
+        report = build_native_runtime_doctor_report(
+            plan,
+            models_root=models_root,
+            prefer=prefer,
+            host=host,
+            port=port,
+            executable=llama_server,
+            manifest_path=manifest_path,
+            state_path=state_path,
+        )
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    for line in render_native_runtime_doctor_report(report):
+        if line.endswith(": True") or line.startswith("- OK "):
+            console.print(f"[green]{line}[/green]")
+        elif line.endswith(": False") or line.startswith("- Missing ") or line.startswith("Warning:"):
+            console.print(f"[yellow]{line}[/yellow]")
+        else:
+            console.print(line)
 
 
 @app.command()

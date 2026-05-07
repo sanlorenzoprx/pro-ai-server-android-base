@@ -114,6 +114,17 @@ class NativeRuntimeLifecycleStatus:
 
 
 @dataclass(frozen=True)
+class NativeRuntimeDoctorReport:
+    manifest: NativeRuntimeManifest
+    launch_plan: NativeRuntimeLaunchPlan
+    lifecycle_status: NativeRuntimeLifecycleStatus
+
+    @property
+    def ready(self) -> bool:
+        return self.launch_plan.ready and self.lifecycle_status.readiness.ok
+
+
+@dataclass(frozen=True)
 class NativeRuntimeError:
     error: str
     message: str
@@ -436,6 +447,54 @@ def render_native_runtime_lifecycle_status(status: NativeRuntimeLifecycleStatus)
     )
     if status.stale_state:
         lines.append("Warning: recorded PID is not running; state is stale.")
+    return tuple(lines)
+
+
+def build_native_runtime_doctor_report(
+    plan: ModelPlan,
+    *,
+    models_root: Path = Path("models"),
+    prefer: str = "chat",
+    host: str = DEFAULT_NATIVE_RUNTIME_HOST,
+    port: int = DEFAULT_NATIVE_RUNTIME_PORT,
+    executable: Path = Path("llama-server"),
+    manifest_path: Path | None = None,
+    state_path: Path = DEFAULT_NATIVE_RUNTIME_STATE_PATH,
+    fetch_tags: Any | None = None,
+    process_exists: Any | None = None,
+) -> NativeRuntimeDoctorReport:
+    manifest = load_native_runtime_manifest(manifest_path)
+    config = build_native_runtime_config_for_model_plan(
+        plan,
+        models_root=models_root,
+        prefer=prefer,
+        host=host,
+        port=port,
+        manifest=manifest,
+    )
+    launch_plan = build_native_runtime_launch_plan(config, executable=executable)
+    lifecycle_status = build_native_runtime_lifecycle_status(
+        state_path,
+        fetch_tags=fetch_tags,
+        process_exists=process_exists,
+    )
+    return NativeRuntimeDoctorReport(
+        manifest=manifest,
+        launch_plan=launch_plan,
+        lifecycle_status=lifecycle_status,
+    )
+
+
+def render_native_runtime_doctor_report(report: NativeRuntimeDoctorReport) -> tuple[str, ...]:
+    lines = [
+        "Native runtime doctor",
+        f"Engine: {report.manifest.engine}",
+        f"Profile ready: {report.launch_plan.ready}",
+        f"Lifecycle ready: {report.lifecycle_status.readiness.ok}",
+        f"Overall ready: {report.ready}",
+    ]
+    lines.extend(render_native_runtime_launch_plan(report.launch_plan)[1:])
+    lines.extend(render_native_runtime_lifecycle_status(report.lifecycle_status)[1:])
     return tuple(lines)
 
 

@@ -19,6 +19,7 @@ Current scaffold:
 - `pro-ai-server native-runtime-start --profile professional`
 - `pro-ai-server native-runtime-status`
 - `pro-ai-server native-runtime-stop`
+- `pro-ai-server native-runtime-doctor`
 
 ## Purpose
 
@@ -262,6 +263,10 @@ polls `/api/tags`.
 
 `native-runtime-stop` only targets the recorded PID and removes the state file
 after a stop attempt.
+
+`native-runtime-doctor` combines profile resolution, manifest loading, launch
+readiness, lifecycle state, and `/api/tags` readiness into one read-only
+preflight report.
 
 Alternate manifests can be inspected with:
 

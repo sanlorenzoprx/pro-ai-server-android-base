@@ -13,6 +13,7 @@ from pro_ai_server.native_runtime import (
     NativeRuntimeProfileDefaults,
     build_llama_server_command,
     build_native_runtime_config_for_model_plan,
+    build_native_runtime_doctor_report,
     build_native_runtime_lifecycle_status,
     build_native_runtime_launch_plan,
     build_native_runtime_model,
@@ -27,6 +28,7 @@ from pro_ai_server.native_runtime import (
     remove_native_runtime_state,
     render_native_runtime_launch_plan,
     render_native_runtime_lifecycle_status,
+    render_native_runtime_doctor_report,
     stop_native_runtime,
     start_native_runtime_process,
     validate_native_runtime_config,
@@ -447,3 +449,49 @@ def test_stop_native_runtime_handles_missing_state(tmp_path):
 
 def test_remove_native_runtime_state_reports_when_file_is_absent(tmp_path):
     assert remove_native_runtime_state(tmp_path / "missing.json") is False
+
+
+def test_build_native_runtime_doctor_report_combines_launch_and_lifecycle(tmp_path):
+    executable = tmp_path / "llama-server"
+    models_root = tmp_path / "models"
+    model_file = models_root / "qwen2.5-coder-3b-instruct-q4_k_m.gguf"
+    state_path = tmp_path / "native-runtime-state.json"
+    models_root.mkdir()
+    executable.write_text("binary", encoding="utf-8")
+    model_file.write_text("model", encoding="utf-8")
+    process = NativeRuntimeProcess(
+        pid=1234,
+        command=build_llama_server_command(NativeRuntimeConfig(model=make_model())),
+    )
+    state = build_native_runtime_state(process, NativeRuntimeConfig(model=make_model()))
+    write_native_runtime_state(state, state_path)
+
+    report = build_native_runtime_doctor_report(
+        model_plan_for_profile("professional"),
+        models_root=models_root,
+        executable=executable,
+        state_path=state_path,
+        fetch_tags=lambda api_base: '{"models":[]}',
+        process_exists=lambda pid: True,
+    )
+
+    assert report.launch_plan.ready is True
+    assert report.lifecycle_status.readiness.ok is True
+    assert report.ready is True
+
+
+def test_render_native_runtime_doctor_report_includes_preflight_summary():
+    report = build_native_runtime_doctor_report(
+        model_plan_for_profile("professional"),
+        state_path=Path("missing-state.json"),
+        fetch_tags=lambda api_base: "{}",
+        process_exists=lambda pid: False,
+    )
+
+    rendered = "\n".join(render_native_runtime_doctor_report(report))
+
+    assert "Native runtime doctor" in rendered
+    assert "Engine: llama.cpp" in rendered
+    assert "Profile ready: False" in rendered
+    assert "Lifecycle ready: False" in rendered
+    assert "Overall ready: False" in rendered
