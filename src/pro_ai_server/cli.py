@@ -2447,6 +2447,7 @@ def status(api_base: str = typer.Option("http://localhost:11434", help="Ollama A
     adb_forward_output = run_optional_command([adb, "forward", "--list"]) if adb else None
     tags_output = run_optional_command(list(build_ollama_tags_command(api_base)))
     ollama_status = assess_ollama_server_status(tags_output)
+    native_status = build_native_runtime_lifecycle_status()
     ide_statuses = tuple(detect_continue_extension_status(ide) for ide in detect_ide_clis())
 
     report = build_status_report(
@@ -2456,6 +2457,7 @@ def status(api_base: str = typer.Option("http://localhost:11434", help="Ollama A
         ide_statuses,
         adb_path=adb,
         api_base=api_base,
+        native_runtime_status=native_status,
     )
     for line in render_status_report(report):
         if line.startswith("OK "):

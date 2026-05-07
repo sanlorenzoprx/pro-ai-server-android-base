@@ -2237,11 +2237,18 @@ def test_status_prints_concise_readiness_report(monkeypatch):
     monkeypatch.setattr(cli, "resolve_adb", lambda: "adb")
     monkeypatch.setattr(cli, "run_optional_command", lambda command: "output")
     monkeypatch.setattr(cli, "assess_ollama_server_status", lambda output: OllamaServerStatus(ok=True))
+    monkeypatch.setattr(cli, "build_native_runtime_lifecycle_status", lambda: None)
     monkeypatch.setattr(cli, "detect_ide_clis", lambda: ())
     monkeypatch.setattr(
         cli,
         "build_status_report",
-        lambda devices, reverse, ollama, ides, adb_path, api_base="http://localhost:11434": ProAiStatus(
+        lambda devices,
+        reverse,
+        ollama,
+        ides,
+        adb_path,
+        api_base="http://localhost:11434",
+        native_runtime_status=None: ProAiStatus(
             items=(
                 StatusItem("Phone", True, "connected (ABC123)"),
                 StatusItem("Ollama", True, "responding on /api/tags (0 models)"),

@@ -275,7 +275,7 @@ The UI preview is a no-phone smoke path over the same production installer state
 pro-ai-server status
 ```
 
-`status` prints a concise readiness view for the connected phone, USB tunnel, Ollama `/api/tags`, and Continue-ready IDE integration. It is read-only and intended for quick daily checks before opening Cursor, VS Code, VSCodium, or Windsurf.
+`status` prints a concise readiness view for the connected phone, USB tunnel, Ollama `/api/tags`, native runtime lifecycle state when present, and Continue-ready IDE integration. It is read-only and intended for quick daily checks before opening Cursor, VS Code, VSCodium, or Windsurf.
 
 Use a custom API base for LAN or Tailscale checks:
 

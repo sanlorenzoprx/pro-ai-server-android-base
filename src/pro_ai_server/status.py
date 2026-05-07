@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from pro_ai_server.adb import select_adb_device_from_output
 from pro_ai_server.ide import IdeExtensionStatus
+from pro_ai_server.native_runtime import NativeRuntimeLifecycleStatus
 from pro_ai_server.ollama import OllamaServerStatus
 
 
@@ -34,6 +35,7 @@ def build_status_report(
     *,
     adb_path: str | None,
     api_base: str = "http://localhost:11434",
+    native_runtime_status: NativeRuntimeLifecycleStatus | None = None,
 ) -> ProAiStatus:
     return ProAiStatus(
         items=(
@@ -41,6 +43,7 @@ def build_status_report(
             _tunnel_item(adb_forward_output, adb_path=adb_path),
             _exposure_item(api_base),
             _server_item(ollama_status),
+            _native_runtime_item(native_runtime_status),
             _ide_item(ide_statuses),
         )
     )
@@ -86,6 +89,19 @@ def _server_item(ollama_status: OllamaServerStatus) -> StatusItem:
         return StatusItem("Ollama", True, f"responding on /api/tags ({model_count} {suffix})")
     warning = ollama_status.warnings[0] if ollama_status.warnings else "not responding"
     return StatusItem("Ollama", False, warning)
+
+
+def _native_runtime_item(native_status: NativeRuntimeLifecycleStatus | None) -> StatusItem:
+    if native_status is None or native_status.state is None:
+        return StatusItem("Native runtime", None, "not configured")
+    state = native_status.state
+    if native_status.process_running and native_status.readiness.ok:
+        return StatusItem("Native runtime", True, f"ready ({state.model}, PID {state.pid})")
+    if native_status.stale_state:
+        return StatusItem("Native runtime", False, f"stale state for PID {state.pid}")
+    if native_status.process_running:
+        return StatusItem("Native runtime", False, native_status.readiness.detail)
+    return StatusItem("Native runtime", False, f"not running (PID {state.pid})")
 
 
 def _ide_item(ide_statuses: tuple[IdeExtensionStatus, ...]) -> StatusItem:
