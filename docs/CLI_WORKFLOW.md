@@ -283,7 +283,55 @@ Use a custom API base for LAN or Tailscale checks:
 pro-ai-server status --api-base http://pro-ai-phone:11434
 ```
 
-## 14. Test Prompt
+## 14. Native Android Runtime Path
+
+The native `llama.cpp` lane is the Android-base direction for reducing Termux/Ollama dependency. It is still explicit and operator-gated: plan commands are read-only, and phone mutation requires `--execute --yes`.
+
+Inspect the selected profile, GGUF file, and startup command:
+
+```powershell
+pro-ai-server native-runtime-config --profile professional --prefer chat
+```
+
+Run a read-only local preflight over manifest, profile, launch plan, lifecycle state, and `/api/tags` readiness:
+
+```powershell
+pro-ai-server native-runtime-doctor --profile professional
+```
+
+Preview Android asset placement without mutating the phone:
+
+```powershell
+pro-ai-server native-runtime-android-plan --profile professional --serial <device-serial>
+```
+
+Install the native runtime assets to Android:
+
+```powershell
+pro-ai-server native-runtime-android-install --profile professional --serial <device-serial> --llama-server C:\path\to\llama-server --models-root C:\path\to\models --execute --yes
+```
+
+Start the pushed runtime on Android and request the USB forward:
+
+```powershell
+pro-ai-server native-runtime-android-start --profile professional --serial <device-serial> --execute --yes
+```
+
+Inspect the remote PID/log lane:
+
+```powershell
+pro-ai-server native-runtime-android-status --profile professional --serial <device-serial> --execute
+```
+
+Stop the recorded remote PID and remove the host forward:
+
+```powershell
+pro-ai-server native-runtime-android-stop --profile professional --serial <device-serial> --execute --yes
+```
+
+The default Android placement is `/data/local/tmp/pro-ai-server/native-runtime`, with `bin/`, `models/`, `config/`, `state/`, and `logs/` subdirectories. This path is an engineering lane, not the final Companion APK experience.
+
+## 15. Test Prompt
 
 ```powershell
 pro-ai-server server-check
@@ -292,7 +340,7 @@ pro-ai-server test-prompt
 
 `server-check` verifies `/api/tags` and required model inventory. `test-prompt` sends a small non-streaming `/api/generate` prompt through the configured endpoint and reports missing model, invalid JSON, empty output, or connection failures.
 
-## 15. Capture Diagnostics
+## 16. Capture Diagnostics
 
 ```powershell
 pro-ai-server diagnose
@@ -301,7 +349,7 @@ pro-ai-server diagnose --output diagnostics.txt
 
 Diagnostics include host details, ADB path, connected phone state, selected hardware facts, `adb forward --list`, IDE CLI discovery, and a local Ollama tags check. Reports redact user-profile paths where possible.
 
-## 16. Production Smoke Script
+## 17. Production Smoke Script
 
 ```powershell
 scripts/smoke-production-installer.ps1
