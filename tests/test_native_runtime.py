@@ -7,13 +7,16 @@ from pro_ai_server.native_runtime import (
     DEFAULT_NATIVE_RUNTIME_PORT,
     NativeRuntimeConfig,
     NativeRuntimeError,
+    NativeRuntimeManifest,
     NativeRuntimeModel,
+    NativeRuntimeProfileDefaults,
     build_native_runtime_config_for_model_plan,
     build_native_runtime_model,
     build_native_runtime_chat_response,
     build_native_runtime_generate_response,
     build_native_runtime_health_response,
     build_native_runtime_tags_response,
+    load_native_runtime_manifest,
     native_runtime_defaults_for_profile,
     validate_native_runtime_config,
 )
@@ -103,6 +106,54 @@ def test_native_runtime_defaults_exist_for_known_profiles():
     assert maximum.threads >= professional.threads
 
 
+def test_load_native_runtime_manifest_reads_packaged_profile_defaults():
+    manifest = load_native_runtime_manifest()
+
+    assert manifest.engine == "llama.cpp"
+    assert "lightweight" in manifest.profiles
+    assert manifest.profiles["professional"].chat_model_filename == "qwen2.5-coder-3b-instruct-q4_k_m.gguf"
+
+
+def test_load_native_runtime_manifest_reads_custom_file(tmp_path):
+    manifest_path = tmp_path / "native-runtime-manifest.json"
+    manifest_path.write_text(
+        """{
+          "engine": "test-engine",
+          "policy": "test policy",
+          "profiles": {
+            "test": {
+              "chat_model_filename": "chat.gguf",
+              "autocomplete_model_filename": "autocomplete.gguf",
+              "context_length": 2048,
+              "threads": 2,
+              "gpu_layers": 1
+            }
+          }
+        }""",
+        encoding="utf-8",
+    )
+
+    manifest = load_native_runtime_manifest(manifest_path)
+
+    assert manifest.engine == "test-engine"
+    assert manifest.policy == "test policy"
+    assert manifest.profiles["test"] == NativeRuntimeProfileDefaults(
+        chat_model_filename="chat.gguf",
+        autocomplete_model_filename="autocomplete.gguf",
+        context_length=2048,
+        threads=2,
+        gpu_layers=1,
+    )
+
+
+def test_load_native_runtime_manifest_rejects_empty_profiles(tmp_path):
+    manifest_path = tmp_path / "native-runtime-manifest.json"
+    manifest_path.write_text('{"profiles": {}}', encoding="utf-8")
+
+    with pytest.raises(ValueError, match="at least one profile"):
+        load_native_runtime_manifest(manifest_path)
+
+
 def test_native_runtime_defaults_reject_unknown_profile():
     with pytest.raises(ValueError, match="Unknown native runtime profile"):
         native_runtime_defaults_for_profile("tiny")
@@ -132,6 +183,34 @@ def test_build_native_runtime_config_for_model_plan_prefers_chat_model():
     assert config.model.gguf_path == Path("bundled-models") / "qwen2.5-coder-3b-instruct-q4_k_m.gguf"
     assert config.context_length == 8192
     assert config.threads == 6
+
+
+def test_build_native_runtime_config_for_model_plan_can_use_custom_manifest():
+    manifest = NativeRuntimeManifest(
+        engine="test",
+        policy="test",
+        profiles={
+            "professional": NativeRuntimeProfileDefaults(
+                chat_model_filename="custom-chat.gguf",
+                autocomplete_model_filename="custom-autocomplete.gguf",
+                context_length=2048,
+                threads=2,
+                gpu_layers=1,
+            )
+        },
+    )
+
+    config = build_native_runtime_config_for_model_plan(
+        model_plan_for_profile("professional"),
+        models_root=Path("custom-models"),
+        manifest=manifest,
+    )
+
+    assert config.model.contract_name == "qwen2.5-coder:3b"
+    assert config.model.gguf_path == Path("custom-models") / "custom-chat.gguf"
+    assert config.context_length == 2048
+    assert config.threads == 2
+    assert config.gpu_layers == 1
 
 
 def test_build_native_runtime_config_for_model_plan_can_prefer_autocomplete_model():

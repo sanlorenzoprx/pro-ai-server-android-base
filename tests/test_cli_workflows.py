@@ -2305,6 +2305,46 @@ def test_native_runtime_config_can_select_profile_from_ram():
     assert "GGUF path: bundled-models\\qwen2.5-coder-0.5b-instruct-q4_k_m.gguf" in result.output
 
 
+def test_native_runtime_config_can_use_custom_manifest(tmp_path):
+    runner = CliRunner()
+    manifest_path = tmp_path / "native-runtime-manifest.json"
+    manifest_path.write_text(
+        """{
+          "engine": "test-engine",
+          "profiles": {
+            "professional": {
+              "chat_model_filename": "custom-chat.gguf",
+              "autocomplete_model_filename": "custom-autocomplete.gguf",
+              "context_length": 2048,
+              "threads": 2,
+              "gpu_layers": 1
+            }
+          }
+        }""",
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "native-runtime-config",
+            "--profile",
+            "professional",
+            "--manifest",
+            str(manifest_path),
+            "--models-root",
+            "custom-models",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Engine: test-engine" in result.output
+    assert "GGUF path: custom-models\\custom-chat.gguf" in result.output
+    assert "Context length: 2048" in result.output
+    assert "Threads: 2" in result.output
+    assert "GPU layers: 1" in result.output
+
+
 def test_native_runtime_config_rejects_invalid_preference():
     runner = CliRunner()
 

@@ -104,7 +104,7 @@ from pro_ai_server.ide import installed_ide_clis
 from pro_ai_server.ide import launch_ide_readiness_matrix
 from pro_ai_server.installer_ui import build_installer_ui_flow, render_installer_ui_flow
 from pro_ai_server.models import model_plan_for_profile, model_plan_for_ram
-from pro_ai_server.native_runtime import build_native_runtime_config_for_model_plan
+from pro_ai_server.native_runtime import build_native_runtime_config_for_model_plan, load_native_runtime_manifest
 from pro_ai_server.ollama import (
     DEFAULT_TEST_PROMPT,
     assess_model_inventory,
@@ -2243,24 +2243,28 @@ def native_runtime_config(
     ram_gb: float | None = typer.Option(None, help="Optional RAM value used to select a profile."),
     prefer: str = typer.Option("chat", help="Resolve the chat or autocomplete runtime lane."),
     models_root: Path = typer.Option(Path("models"), help="Root directory containing GGUF model files."),
+    manifest_path: Path | None = typer.Option(None, "--manifest", help="Optional native runtime manifest JSON path."),
     host: str = typer.Option("127.0.0.1", help="Native runtime bind host."),
     port: int = typer.Option(11434, help="Native runtime bind port."),
 ) -> None:
     """Render the resolved native runtime config without starting the engine."""
     try:
         plan = model_plan_for_ram(ram_gb) if ram_gb is not None else model_plan_for_profile(profile_name)
+        manifest = load_native_runtime_manifest(manifest_path)
         config = build_native_runtime_config_for_model_plan(
             plan,
             models_root=models_root,
             prefer=prefer,
             host=host,
             port=port,
+            manifest=manifest,
         )
     except ValueError as exc:
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(code=1) from exc
 
     console.print("[bold]Native runtime config[/bold]")
+    console.print(f"Engine: {manifest.engine}")
     console.print(f"Profile: {plan.profile}")
     console.print(f"Preference: {prefer.strip().lower()}")
     console.print(f"Model contract: {config.model.contract_name}")

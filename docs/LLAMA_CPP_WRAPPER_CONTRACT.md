@@ -13,6 +13,7 @@ See:
 Current scaffold:
 
 - [src/pro_ai_server/native_runtime.py](/abs/c:/repos/pro-ai-server-android-base/src/pro_ai_server/native_runtime.py)
+- [src/pro_ai_server/native-runtime-manifest.json](/abs/c:/repos/pro-ai-server-android-base/src/pro_ai_server/native-runtime-manifest.json)
 - `pro-ai-server native-runtime-config --profile professional --prefer chat`
 
 ## Purpose
@@ -198,10 +199,21 @@ that resolves:
 - concrete GGUF filename
 - runtime defaults such as context length and threads
 
+The default manifest is packaged at
+[native-runtime-manifest.json](/abs/c:/repos/pro-ai-server-android-base/src/pro_ai_server/native-runtime-manifest.json).
+It keeps the initial model catalog data-driven so curated model choices can change
+without rewriting host or gateway logic.
+
 The current CLI inspection surface is:
 
 ```powershell
 pro-ai-server native-runtime-config --profile professional --prefer chat
+```
+
+Alternate manifests can be inspected with:
+
+```powershell
+pro-ai-server native-runtime-config --profile professional --manifest .\native-runtime-manifest.json
 ```
 
 It should render:

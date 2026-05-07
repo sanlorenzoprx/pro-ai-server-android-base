@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
+from importlib import resources
 from pathlib import Path
+from typing import Any
 
 from pro_ai_server.models import ModelPlan
 
@@ -54,26 +57,30 @@ class NativeRuntimeProfileDefaults:
     gpu_layers: int = 0
 
 
-NATIVE_RUNTIME_PROFILE_DEFAULTS: dict[str, NativeRuntimeProfileDefaults] = {
-    "lightweight": NativeRuntimeProfileDefaults(
-        chat_model_filename="qwen2.5-coder-1.5b-instruct-q4_k_m.gguf",
-        autocomplete_model_filename="qwen2.5-coder-0.5b-instruct-q4_k_m.gguf",
-        context_length=4096,
-        threads=4,
-    ),
-    "professional": NativeRuntimeProfileDefaults(
-        chat_model_filename="qwen2.5-coder-3b-instruct-q4_k_m.gguf",
-        autocomplete_model_filename="qwen2.5-coder-1.5b-base-q4_k_m.gguf",
-        context_length=8192,
-        threads=6,
-    ),
-    "max": NativeRuntimeProfileDefaults(
-        chat_model_filename="qwen2.5-coder-7b-instruct-q4_k_m.gguf",
-        autocomplete_model_filename="qwen2.5-coder-1.5b-base-q4_k_m.gguf",
-        context_length=8192,
-        threads=8,
-    ),
-}
+@dataclass(frozen=True)
+class NativeRuntimeManifest:
+    engine: str
+    policy: str
+    profiles: dict[str, NativeRuntimeProfileDefaults]
+
+
+def load_native_runtime_manifest(path: Path | None = None) -> NativeRuntimeManifest:
+    if path is None:
+        text = resources.files("pro_ai_server").joinpath("native-runtime-manifest.json").read_text(encoding="utf-8")
+    else:
+        text = path.read_text(encoding="utf-8")
+    payload = json.loads(text)
+    profiles = {
+        str(profile): _profile_defaults_from_mapping(defaults)
+        for profile, defaults in payload.get("profiles", {}).items()
+    }
+    if not profiles:
+        raise ValueError("Native runtime manifest must define at least one profile.")
+    return NativeRuntimeManifest(
+        engine=str(payload.get("engine", "llama.cpp")),
+        policy=str(payload.get("policy", "")),
+        profiles=profiles,
+    )
 
 
 def validate_native_runtime_config(config: NativeRuntimeConfig) -> None:
@@ -89,12 +96,17 @@ def validate_native_runtime_config(config: NativeRuntimeConfig) -> None:
         raise ValueError("Native runtime GPU layers must not be negative.")
 
 
-def native_runtime_defaults_for_profile(profile: str) -> NativeRuntimeProfileDefaults:
+def native_runtime_defaults_for_profile(
+    profile: str,
+    *,
+    manifest: NativeRuntimeManifest | None = None,
+) -> NativeRuntimeProfileDefaults:
+    runtime_manifest = manifest or load_native_runtime_manifest()
     normalized = profile.strip().lower()
     try:
-        return NATIVE_RUNTIME_PROFILE_DEFAULTS[normalized]
+        return runtime_manifest.profiles[normalized]
     except KeyError as exc:
-        valid_profiles = ", ".join(NATIVE_RUNTIME_PROFILE_DEFAULTS)
+        valid_profiles = ", ".join(runtime_manifest.profiles)
         raise ValueError(f"Unknown native runtime profile '{profile}'. Expected one of: {valid_profiles}.") from exc
 
 
@@ -117,8 +129,9 @@ def build_native_runtime_config_for_model_plan(
     prefer: str = "chat",
     host: str = DEFAULT_NATIVE_RUNTIME_HOST,
     port: int = DEFAULT_NATIVE_RUNTIME_PORT,
+    manifest: NativeRuntimeManifest | None = None,
 ) -> NativeRuntimeConfig:
-    defaults = native_runtime_defaults_for_profile(plan.profile)
+    defaults = native_runtime_defaults_for_profile(plan.profile, manifest=manifest)
     normalized_prefer = prefer.strip().lower()
     if normalized_prefer not in {"chat", "autocomplete"}:
         raise ValueError("Native runtime prefer value must be 'chat' or 'autocomplete'.")
@@ -168,3 +181,24 @@ def build_native_runtime_chat_response(content: str) -> dict[str, object]:
             "content": content,
         }
     }
+
+
+def _profile_defaults_from_mapping(defaults: dict[str, Any]) -> NativeRuntimeProfileDefaults:
+    profile_defaults = NativeRuntimeProfileDefaults(
+        chat_model_filename=str(defaults["chat_model_filename"]),
+        autocomplete_model_filename=str(defaults["autocomplete_model_filename"]),
+        context_length=int(defaults["context_length"]),
+        threads=int(defaults["threads"]),
+        gpu_layers=int(defaults.get("gpu_layers", 0)),
+    )
+    if not profile_defaults.chat_model_filename.strip():
+        raise ValueError("Native runtime profile chat model filename must not be empty.")
+    if not profile_defaults.autocomplete_model_filename.strip():
+        raise ValueError("Native runtime profile autocomplete model filename must not be empty.")
+    if profile_defaults.context_length <= 0:
+        raise ValueError("Native runtime profile context length must be positive.")
+    if profile_defaults.threads <= 0:
+        raise ValueError("Native runtime profile threads must be positive.")
+    if profile_defaults.gpu_layers < 0:
+        raise ValueError("Native runtime profile GPU layers must not be negative.")
+    return profile_defaults
