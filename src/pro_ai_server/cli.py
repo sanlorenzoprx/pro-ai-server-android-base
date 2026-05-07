@@ -107,7 +107,9 @@ from pro_ai_server.models import model_plan_for_profile, model_plan_for_ram
 from pro_ai_server.native_android import (
     DEFAULT_ANDROID_NATIVE_RUNTIME_ROOT,
     build_native_android_runtime_install_plan,
+    build_native_android_runtime_start_plan,
     render_native_android_runtime_install_plan,
+    render_native_android_runtime_start_plan,
 )
 from pro_ai_server.native_runtime import (
     build_llama_server_command,
@@ -2583,6 +2585,65 @@ def native_runtime_android_install(
         raise typer.Exit(code=1) from exc
 
     console.print(f"[green]Installed native runtime assets to device {selected_serial}.[/green]")
+
+
+@app.command("native-runtime-android-start")
+def native_runtime_android_start(
+    profile_name: str = typer.Option("professional", "--profile", help="Model profile to resolve."),
+    ram_gb: float | None = typer.Option(None, help="Optional RAM value used to select a profile."),
+    prefer: str = typer.Option("chat", help="Resolve the chat or autocomplete runtime lane."),
+    models_root: Path = typer.Option(Path("models"), help="Root directory containing GGUF model files."),
+    manifest_path: Path | None = typer.Option(None, "--manifest", help="Optional native runtime manifest JSON path."),
+    remote_root: str = typer.Option(DEFAULT_ANDROID_NATIVE_RUNTIME_ROOT, help="Android remote runtime root."),
+    serial: str | None = typer.Option(None, help="ADB device serial to use when multiple phones are connected."),
+    execute: bool = typer.Option(False, "--execute", help="Run the ADB remote start commands."),
+    yes: bool = typer.Option(False, "--yes", help="Confirm phone mutation when using --execute."),
+) -> None:
+    """Start the native Android runtime from the pushed remote layout."""
+    adb = resolve_adb()
+    if not adb:
+        console.print("[red]adb not found. Release builds should include bundled platform-tools.[/red]")
+        raise typer.Exit(code=1)
+    try:
+        selected_serial = select_device_serial(adb, serial)
+        plan = model_plan_for_ram(ram_gb) if ram_gb is not None else model_plan_for_profile(profile_name)
+        manifest = load_native_runtime_manifest(manifest_path)
+        config = build_native_runtime_config_for_model_plan(
+            plan,
+            models_root=models_root,
+            prefer=prefer,
+            manifest=manifest,
+        )
+        start_plan = build_native_android_runtime_start_plan(
+            config,
+            remote_root=remote_root,
+            serial=selected_serial,
+        )
+    except (CommandError, ValueError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    for line in render_native_android_runtime_start_plan(start_plan):
+        console.print(line)
+
+    if not execute:
+        console.print("Plan only. Re-run with --execute --yes to start the native Android runtime.")
+        return
+    if not yes:
+        console.print("[red]Refusing to start native Android runtime without --yes.[/red]")
+        raise typer.Exit(code=1)
+
+    try:
+        for command in start_plan.commands:
+            run_command([adb, *list(command[1:])])
+    except CommandError as exc:
+        console.print("[red]Native Android runtime start failed while running ADB.[/red]")
+        console.print(str(exc))
+        raise typer.Exit(code=1) from exc
+
+    console.print(f"[green]Requested native Android runtime start on device {selected_serial}.[/green]")
+    console.print(f"Remote PID file: {start_plan.remote_pid_file}")
+    console.print(f"Remote log file: {start_plan.remote_log_file}")
 
 
 @app.command()

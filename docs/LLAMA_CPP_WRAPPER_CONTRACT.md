@@ -22,6 +22,7 @@ Current scaffold:
 - `pro-ai-server native-runtime-doctor`
 - `pro-ai-server native-runtime-android-plan`
 - `pro-ai-server native-runtime-android-install`
+- `pro-ai-server native-runtime-android-start`
 
 ## Purpose
 
@@ -292,6 +293,10 @@ phone.
 `native-runtime-android-install --execute --yes` creates the remote directories,
 pushes the selected runtime binary, selected GGUF model, and manifest, marks the
 runtime binary executable, and requests `adb forward tcp:11434 tcp:11434`.
+
+`native-runtime-android-start --execute --yes` requests a remote `llama-server`
+start under the same Android layout, writes a remote PID file, writes logs, and
+requests `adb forward tcp:11434 tcp:11434`.
 
 Alternate manifests can be inspected with:
 

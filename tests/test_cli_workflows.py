@@ -2742,6 +2742,59 @@ def test_native_runtime_android_install_executes_adb_commands(monkeypatch):
     assert "Installed native runtime assets" in result.output
 
 
+def test_native_runtime_android_start_prints_plan_without_execute(monkeypatch):
+    runner = CliRunner()
+
+    monkeypatch.setattr(cli, "resolve_adb", lambda: "adb")
+    monkeypatch.setattr(cli, "select_device_serial", lambda adb, serial: "ABC123")
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "native-runtime-android-start",
+            "--profile",
+            "professional",
+            "--remote-root",
+            "/data/local/tmp/pro-ai",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Native Android runtime start plan" in result.output
+    assert "/data/local/tmp/pro-ai/bin/llama-server" in result.output
+    assert "Plan only" in result.output
+
+
+def test_native_runtime_android_start_refuses_execute_without_yes(monkeypatch):
+    runner = CliRunner()
+
+    monkeypatch.setattr(cli, "resolve_adb", lambda: "adb")
+    monkeypatch.setattr(cli, "select_device_serial", lambda adb, serial: "ABC123")
+
+    result = runner.invoke(cli.app, ["native-runtime-android-start", "--execute"])
+
+    assert result.exit_code == 1
+    assert "without --yes" in result.output
+
+
+def test_native_runtime_android_start_executes_adb_commands(monkeypatch):
+    runner = CliRunner()
+    commands = []
+
+    monkeypatch.setattr(cli, "resolve_adb", lambda: "adb")
+    monkeypatch.setattr(cli, "select_device_serial", lambda adb, serial: "ABC123")
+    monkeypatch.setattr(cli, "run_command", lambda command: commands.append(command) or "")
+
+    result = runner.invoke(cli.app, ["native-runtime-android-start", "--execute", "--yes"])
+
+    assert result.exit_code == 0
+    assert commands
+    assert any(command[:4] == ["adb", "-s", "ABC123", "shell"] for command in commands)
+    assert any(command == ["adb", "-s", "ABC123", "forward", "tcp:11434", "tcp:11434"] for command in commands)
+    assert "Requested native Android runtime start" in result.output
+    assert "Remote PID file" in result.output
+
+
 def test_setup_tailscale_reports_already_installed_on_host_and_phone(monkeypatch):
     runner = CliRunner()
 

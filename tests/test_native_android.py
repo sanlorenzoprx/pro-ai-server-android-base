@@ -5,7 +5,9 @@ from pro_ai_server.native_android import (
     DEFAULT_ANDROID_NATIVE_RUNTIME_ROOT,
     build_native_android_runtime_install_plan,
     build_native_android_runtime_layout,
+    build_native_android_runtime_start_plan,
     render_native_android_runtime_install_plan,
+    render_native_android_runtime_start_plan,
 )
 from pro_ai_server.native_runtime import build_native_runtime_config_for_model_plan, load_native_runtime_manifest
 
@@ -78,3 +80,35 @@ def test_render_native_android_runtime_install_plan_is_operator_readable():
     assert "Remote binary:" in rendered
     assert "Commands:" in rendered
     assert "Instructions:" in rendered
+
+
+def test_build_native_android_runtime_start_plan_runs_remote_llama_server_and_forwards_port():
+    config = build_native_runtime_config_for_model_plan(
+        model_plan_for_profile("professional"),
+        models_root=Path("models"),
+    )
+
+    plan = build_native_android_runtime_start_plan(
+        config,
+        remote_root="/data/local/tmp/pro-ai",
+        serial="ABC123",
+    )
+
+    assert plan.commands[0][0:4] == ("adb", "-s", "ABC123", "shell")
+    assert "/data/local/tmp/pro-ai/bin/llama-server" in plan.remote_start_shell
+    assert "--model /data/local/tmp/pro-ai/models/qwen2.5-coder-3b-instruct-q4_k_m.gguf" in plan.remote_start_shell
+    assert "nohup" in plan.remote_start_shell
+    assert "echo $!" in plan.remote_start_shell
+    assert plan.commands[1] == ("adb", "-s", "ABC123", "forward", "tcp:11434", "tcp:11434")
+
+
+def test_render_native_android_runtime_start_plan_is_operator_readable():
+    config = build_native_runtime_config_for_model_plan(model_plan_for_profile("professional"))
+    plan = build_native_android_runtime_start_plan(config)
+
+    rendered = "\n".join(render_native_android_runtime_start_plan(plan))
+
+    assert "Native Android runtime start plan" in rendered
+    assert "Remote PID file:" in rendered
+    assert "Remote log file:" in rendered
+    assert "Commands:" in rendered

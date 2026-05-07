@@ -31,6 +31,15 @@ class NativeAndroidRuntimeInstallPlan:
     instructions: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class NativeAndroidRuntimeStartPlan:
+    layout: NativeAndroidRuntimeLayout
+    commands: tuple[Command, ...]
+    remote_pid_file: PurePosixPath
+    remote_log_file: PurePosixPath
+    remote_start_shell: str
+
+
 def build_native_android_runtime_layout(
     config: NativeRuntimeConfig,
     *,
@@ -95,6 +104,28 @@ def build_native_android_runtime_install_plan(
     )
 
 
+def build_native_android_runtime_start_plan(
+    config: NativeRuntimeConfig,
+    *,
+    remote_root: str = DEFAULT_ANDROID_NATIVE_RUNTIME_ROOT,
+    serial: str | None = None,
+) -> NativeAndroidRuntimeStartPlan:
+    layout = build_native_android_runtime_layout(config, remote_root=remote_root)
+    remote_pid_file = layout.state_dir / "llama-server.pid"
+    remote_log_file = layout.logs_dir / "llama-server.log"
+    remote_start_shell = _remote_start_shell(config, layout, remote_pid_file, remote_log_file)
+    return NativeAndroidRuntimeStartPlan(
+        layout=layout,
+        commands=(
+            _adb_command(("shell", remote_start_shell), serial),
+            _adb_command(("forward", f"tcp:{config.port}", f"tcp:{config.port}"), serial),
+        ),
+        remote_pid_file=remote_pid_file,
+        remote_log_file=remote_log_file,
+        remote_start_shell=remote_start_shell,
+    )
+
+
 def render_native_android_runtime_install_plan(plan: NativeAndroidRuntimeInstallPlan) -> tuple[str, ...]:
     lines = [
         "Native Android runtime install plan",
@@ -110,7 +141,48 @@ def render_native_android_runtime_install_plan(plan: NativeAndroidRuntimeInstall
     return tuple(lines)
 
 
+def render_native_android_runtime_start_plan(plan: NativeAndroidRuntimeStartPlan) -> tuple[str, ...]:
+    lines = [
+        "Native Android runtime start plan",
+        f"Remote root: {plan.layout.root}",
+        f"Remote PID file: {plan.remote_pid_file}",
+        f"Remote log file: {plan.remote_log_file}",
+        "Commands:",
+    ]
+    lines.extend(" ".join(command) for command in plan.commands)
+    return tuple(lines)
+
+
 def _adb_command(args: tuple[str, ...], serial: str | None) -> Command:
     if serial:
         return ("adb", "-s", serial, *args)
     return ("adb", *args)
+
+
+def _remote_start_shell(
+    config: NativeRuntimeConfig,
+    layout: NativeAndroidRuntimeLayout,
+    remote_pid_file: PurePosixPath,
+    remote_log_file: PurePosixPath,
+) -> str:
+    args = [
+        str(layout.remote_llama_server),
+        "--model",
+        str(layout.remote_model),
+        "--host",
+        config.host,
+        "--port",
+        str(config.port),
+        "--ctx-size",
+        str(config.context_length),
+        "--threads",
+        str(config.threads),
+    ]
+    if config.gpu_layers:
+        args.extend(("--n-gpu-layers", str(config.gpu_layers)))
+    command = " ".join(args)
+    return (
+        f"mkdir -p {layout.state_dir} {layout.logs_dir} && "
+        f"nohup {command} > {remote_log_file} 2>&1 & "
+        f"echo $! > {remote_pid_file}"
+    )
