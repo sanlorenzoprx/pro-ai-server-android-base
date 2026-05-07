@@ -2280,6 +2280,9 @@ def test_native_runtime_config_prints_resolved_chat_config():
     assert "API base: http://127.0.0.1:11434" in result.output
     assert "Context length: 8192" in result.output
     assert "Threads: 6" in result.output
+    assert "Startup command: llama-server --model" in result.output
+    assert "bundled-models\\qwen2.5-coder-3b-instruct-q4_k_m.gguf" in result.output
+    assert "--ctx-size 8192" in result.output
 
 
 def test_native_runtime_config_can_select_profile_from_ram():
@@ -2343,6 +2346,7 @@ def test_native_runtime_config_can_use_custom_manifest(tmp_path):
     assert "Context length: 2048" in result.output
     assert "Threads: 2" in result.output
     assert "GPU layers: 1" in result.output
+    assert "--n-gpu-layers 1" in result.output
 
 
 def test_native_runtime_config_rejects_invalid_preference():

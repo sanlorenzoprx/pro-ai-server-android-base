@@ -210,6 +210,10 @@ The current CLI inspection surface is:
 pro-ai-server native-runtime-config --profile professional --prefer chat
 ```
 
+It also renders the planned `llama-server` startup command without launching the
+engine. The command builder follows the official `llama-server` direction from
+`llama.cpp`, where the HTTP server is started with a GGUF model and bind port.
+
 Alternate manifests can be inspected with:
 
 ```powershell

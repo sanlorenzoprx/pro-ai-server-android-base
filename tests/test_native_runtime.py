@@ -10,6 +10,7 @@ from pro_ai_server.native_runtime import (
     NativeRuntimeManifest,
     NativeRuntimeModel,
     NativeRuntimeProfileDefaults,
+    build_llama_server_command,
     build_native_runtime_config_for_model_plan,
     build_native_runtime_model,
     build_native_runtime_chat_response,
@@ -229,3 +230,39 @@ def test_build_native_runtime_config_for_model_plan_can_prefer_autocomplete_mode
 def test_build_native_runtime_config_for_model_plan_rejects_invalid_preference():
     with pytest.raises(ValueError, match="prefer value"):
         build_native_runtime_config_for_model_plan(model_plan_for_profile("lightweight"), prefer="summary")
+
+
+def test_build_llama_server_command_uses_wrapper_config_values():
+    config = NativeRuntimeConfig(
+        model=NativeRuntimeModel(
+            contract_name="qwen2.5-coder:3b",
+            gguf_path=Path("models") / "qwen2.5-coder-3b-instruct-q4_k_m.gguf",
+        ),
+        host="127.0.0.1",
+        port=11434,
+        context_length=8192,
+        threads=6,
+    )
+
+    command = build_llama_server_command(config, executable=Path("bin") / "llama-server")
+
+    assert command.command == (
+        str(Path("bin") / "llama-server"),
+        "--model",
+        str(Path("models") / "qwen2.5-coder-3b-instruct-q4_k_m.gguf"),
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "11434",
+        "--ctx-size",
+        "8192",
+        "--threads",
+        "6",
+    )
+
+
+def test_build_llama_server_command_includes_gpu_layers_when_enabled():
+    command = build_llama_server_command(NativeRuntimeConfig(model=make_model(), gpu_layers=8))
+
+    assert "--n-gpu-layers" in command.args
+    assert command.args[-1] == "8"

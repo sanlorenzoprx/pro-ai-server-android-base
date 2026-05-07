@@ -37,6 +37,19 @@ class NativeRuntimeConfig:
 
 
 @dataclass(frozen=True)
+class NativeRuntimeServerCommand:
+    executable: Path
+    args: tuple[str, ...]
+
+    @property
+    def command(self) -> tuple[str, ...]:
+        return (str(self.executable), *self.args)
+
+    def render(self) -> str:
+        return " ".join(self.command)
+
+
+@dataclass(frozen=True)
 class NativeRuntimeError:
     error: str
     message: str
@@ -155,6 +168,29 @@ def build_native_runtime_config_for_model_plan(
     )
     validate_native_runtime_config(config)
     return config
+
+
+def build_llama_server_command(
+    config: NativeRuntimeConfig,
+    *,
+    executable: Path = Path("llama-server"),
+) -> NativeRuntimeServerCommand:
+    validate_native_runtime_config(config)
+    args = [
+        "--model",
+        str(config.model.gguf_path),
+        "--host",
+        config.host,
+        "--port",
+        str(config.port),
+        "--ctx-size",
+        str(config.context_length),
+        "--threads",
+        str(config.threads),
+    ]
+    if config.gpu_layers:
+        args.extend(("--n-gpu-layers", str(config.gpu_layers)))
+    return NativeRuntimeServerCommand(executable=executable, args=tuple(args))
 
 
 def build_native_runtime_health_response() -> dict[str, str]:

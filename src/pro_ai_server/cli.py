@@ -104,7 +104,11 @@ from pro_ai_server.ide import installed_ide_clis
 from pro_ai_server.ide import launch_ide_readiness_matrix
 from pro_ai_server.installer_ui import build_installer_ui_flow, render_installer_ui_flow
 from pro_ai_server.models import model_plan_for_profile, model_plan_for_ram
-from pro_ai_server.native_runtime import build_native_runtime_config_for_model_plan, load_native_runtime_manifest
+from pro_ai_server.native_runtime import (
+    build_llama_server_command,
+    build_native_runtime_config_for_model_plan,
+    load_native_runtime_manifest,
+)
 from pro_ai_server.ollama import (
     DEFAULT_TEST_PROMPT,
     assess_model_inventory,
@@ -2244,6 +2248,7 @@ def native_runtime_config(
     prefer: str = typer.Option("chat", help="Resolve the chat or autocomplete runtime lane."),
     models_root: Path = typer.Option(Path("models"), help="Root directory containing GGUF model files."),
     manifest_path: Path | None = typer.Option(None, "--manifest", help="Optional native runtime manifest JSON path."),
+    llama_server: Path = typer.Option(Path("llama-server"), help="llama.cpp server executable path."),
     host: str = typer.Option("127.0.0.1", help="Native runtime bind host."),
     port: int = typer.Option(11434, help="Native runtime bind port."),
 ) -> None:
@@ -2259,6 +2264,7 @@ def native_runtime_config(
             port=port,
             manifest=manifest,
         )
+        command = build_llama_server_command(config, executable=llama_server)
     except ValueError as exc:
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(code=1) from exc
@@ -2273,6 +2279,7 @@ def native_runtime_config(
     console.print(f"Context length: {config.context_length}")
     console.print(f"Threads: {config.threads}")
     console.print(f"GPU layers: {config.gpu_layers}")
+    console.print(f"Startup command: {command.render()}")
 
 
 @app.command()
