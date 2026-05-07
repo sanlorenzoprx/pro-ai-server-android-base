@@ -104,6 +104,11 @@ from pro_ai_server.ide import installed_ide_clis
 from pro_ai_server.ide import launch_ide_readiness_matrix
 from pro_ai_server.installer_ui import build_installer_ui_flow, render_installer_ui_flow
 from pro_ai_server.models import model_plan_for_profile, model_plan_for_ram
+from pro_ai_server.native_android import (
+    DEFAULT_ANDROID_NATIVE_RUNTIME_ROOT,
+    build_native_android_runtime_install_plan,
+    render_native_android_runtime_install_plan,
+)
 from pro_ai_server.native_runtime import (
     build_llama_server_command,
     build_native_runtime_config_for_model_plan,
@@ -2480,6 +2485,104 @@ def native_runtime_doctor(
             console.print(f"[yellow]{line}[/yellow]")
         else:
             console.print(line)
+
+
+@app.command("native-runtime-android-plan")
+def native_runtime_android_plan(
+    profile_name: str = typer.Option("professional", "--profile", help="Model profile to resolve."),
+    ram_gb: float | None = typer.Option(None, help="Optional RAM value used to select a profile."),
+    prefer: str = typer.Option("chat", help="Resolve the chat or autocomplete runtime lane."),
+    models_root: Path = typer.Option(Path("models"), help="Root directory containing GGUF model files."),
+    manifest_path: Path | None = typer.Option(None, "--manifest", help="Optional native runtime manifest JSON path."),
+    llama_server: Path = typer.Option(Path("llama-server"), help="Local llama.cpp server executable path."),
+    remote_root: str = typer.Option(DEFAULT_ANDROID_NATIVE_RUNTIME_ROOT, help="Android remote runtime root."),
+    serial: str | None = typer.Option(None, help="ADB device serial to use when multiple phones are connected."),
+) -> None:
+    """Preview native runtime asset placement on Android without mutating the phone."""
+    try:
+        plan = model_plan_for_ram(ram_gb) if ram_gb is not None else model_plan_for_profile(profile_name)
+        manifest = load_native_runtime_manifest(manifest_path)
+        config = build_native_runtime_config_for_model_plan(
+            plan,
+            models_root=models_root,
+            prefer=prefer,
+            manifest=manifest,
+        )
+        install_plan = build_native_android_runtime_install_plan(
+            config,
+            manifest,
+            local_llama_server=llama_server,
+            local_manifest=manifest_path or package_root() / "native-runtime-manifest.json",
+            remote_root=remote_root,
+            serial=serial,
+        )
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    for line in render_native_android_runtime_install_plan(install_plan):
+        console.print(line)
+
+
+@app.command("native-runtime-android-install")
+def native_runtime_android_install(
+    profile_name: str = typer.Option("professional", "--profile", help="Model profile to resolve."),
+    ram_gb: float | None = typer.Option(None, help="Optional RAM value used to select a profile."),
+    prefer: str = typer.Option("chat", help="Resolve the chat or autocomplete runtime lane."),
+    models_root: Path = typer.Option(Path("models"), help="Root directory containing GGUF model files."),
+    manifest_path: Path | None = typer.Option(None, "--manifest", help="Optional native runtime manifest JSON path."),
+    llama_server: Path = typer.Option(Path("llama-server"), help="Local llama.cpp server executable path."),
+    remote_root: str = typer.Option(DEFAULT_ANDROID_NATIVE_RUNTIME_ROOT, help="Android remote runtime root."),
+    serial: str | None = typer.Option(None, help="ADB device serial to use when multiple phones are connected."),
+    execute: bool = typer.Option(False, "--execute", help="Run the ADB install commands."),
+    yes: bool = typer.Option(False, "--yes", help="Confirm phone mutation when using --execute."),
+) -> None:
+    """Install native runtime assets onto Android with ADB."""
+    adb = resolve_adb()
+    if not adb:
+        console.print("[red]adb not found. Release builds should include bundled platform-tools.[/red]")
+        raise typer.Exit(code=1)
+    try:
+        selected_serial = select_device_serial(adb, serial)
+        plan = model_plan_for_ram(ram_gb) if ram_gb is not None else model_plan_for_profile(profile_name)
+        manifest = load_native_runtime_manifest(manifest_path)
+        config = build_native_runtime_config_for_model_plan(
+            plan,
+            models_root=models_root,
+            prefer=prefer,
+            manifest=manifest,
+        )
+        install_plan = build_native_android_runtime_install_plan(
+            config,
+            manifest,
+            local_llama_server=llama_server,
+            local_manifest=manifest_path or package_root() / "native-runtime-manifest.json",
+            remote_root=remote_root,
+            serial=selected_serial,
+        )
+    except (CommandError, ValueError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    for line in render_native_android_runtime_install_plan(install_plan):
+        console.print(line)
+
+    if not execute:
+        console.print("Plan only. Re-run with --execute --yes to push native runtime assets.")
+        return
+    if not yes:
+        console.print("[red]Refusing to install native runtime assets without --yes.[/red]")
+        raise typer.Exit(code=1)
+
+    try:
+        for command in install_plan.commands:
+            run_command([adb, *list(command[1:])])
+    except CommandError as exc:
+        console.print("[red]Native runtime Android install failed while running ADB.[/red]")
+        console.print(str(exc))
+        raise typer.Exit(code=1) from exc
+
+    console.print(f"[green]Installed native runtime assets to device {selected_serial}.[/green]")
 
 
 @app.command()

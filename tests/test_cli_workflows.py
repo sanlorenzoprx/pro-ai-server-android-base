@@ -2637,6 +2637,111 @@ def test_native_runtime_doctor_reports_preflight(tmp_path):
     assert "State: missing" in result.output
 
 
+def test_native_runtime_android_plan_prints_adb_asset_plan():
+    runner = CliRunner()
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "native-runtime-android-plan",
+            "--profile",
+            "professional",
+            "--models-root",
+            "models",
+            "--llama-server",
+            "llama-server",
+            "--remote-root",
+            "/data/local/tmp/pro-ai",
+            "--serial",
+            "ABC123",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Native Android runtime install plan" in result.output
+    assert "/data/local/tmp/pro-ai/bin/llama-server" in result.output
+    assert "adb -s ABC123 push llama-server" in result.output
+    assert "adb -s ABC123 forward tcp:11434 tcp:11434" in result.output
+
+
+def test_native_runtime_android_install_prints_plan_without_execute(monkeypatch):
+    runner = CliRunner()
+
+    monkeypatch.setattr(cli, "resolve_adb", lambda: "adb")
+    monkeypatch.setattr(cli, "select_device_serial", lambda adb, serial: "ABC123")
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "native-runtime-android-install",
+            "--profile",
+            "professional",
+            "--models-root",
+            "models",
+            "--llama-server",
+            "llama-server",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Native Android runtime install plan" in result.output
+    assert "Plan only" in result.output
+
+
+def test_native_runtime_android_install_refuses_execute_without_yes(monkeypatch):
+    runner = CliRunner()
+
+    monkeypatch.setattr(cli, "resolve_adb", lambda: "adb")
+    monkeypatch.setattr(cli, "select_device_serial", lambda adb, serial: "ABC123")
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "native-runtime-android-install",
+            "--profile",
+            "professional",
+            "--models-root",
+            "models",
+            "--llama-server",
+            "llama-server",
+            "--execute",
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "without --yes" in result.output
+
+
+def test_native_runtime_android_install_executes_adb_commands(monkeypatch):
+    runner = CliRunner()
+    commands = []
+
+    monkeypatch.setattr(cli, "resolve_adb", lambda: "adb")
+    monkeypatch.setattr(cli, "select_device_serial", lambda adb, serial: "ABC123")
+    monkeypatch.setattr(cli, "run_command", lambda command: commands.append(command) or "")
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "native-runtime-android-install",
+            "--profile",
+            "professional",
+            "--models-root",
+            "models",
+            "--llama-server",
+            "llama-server",
+            "--execute",
+            "--yes",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert commands
+    assert any(command[:4] == ["adb", "-s", "ABC123", "push"] for command in commands)
+    assert any(command == ["adb", "-s", "ABC123", "forward", "tcp:11434", "tcp:11434"] for command in commands)
+    assert "Installed native runtime assets" in result.output
+
+
 def test_setup_tailscale_reports_already_installed_on_host_and_phone(monkeypatch):
     runner = CliRunner()
 

@@ -20,6 +20,8 @@ Current scaffold:
 - `pro-ai-server native-runtime-status`
 - `pro-ai-server native-runtime-stop`
 - `pro-ai-server native-runtime-doctor`
+- `pro-ai-server native-runtime-android-plan`
+- `pro-ai-server native-runtime-android-install`
 
 ## Purpose
 
@@ -267,6 +269,29 @@ after a stop attempt.
 `native-runtime-doctor` combines profile resolution, manifest loading, launch
 readiness, lifecycle state, and `/api/tags` readiness into one read-only
 preflight report.
+
+## Android Asset Placement
+
+The native Android asset lane places files under:
+
+```text
+/data/local/tmp/pro-ai-server/native-runtime
+```
+
+The default layout is:
+
+- `bin/llama-server`
+- `models/<selected-model>.gguf`
+- `config/native-runtime-manifest.json`
+- `state/`
+- `logs/`
+
+`native-runtime-android-plan` renders the ADB commands without mutating the
+phone.
+
+`native-runtime-android-install --execute --yes` creates the remote directories,
+pushes the selected runtime binary, selected GGUF model, and manifest, marks the
+runtime binary executable, and requests `adb forward tcp:11434 tcp:11434`.
 
 Alternate manifests can be inspected with:
 
