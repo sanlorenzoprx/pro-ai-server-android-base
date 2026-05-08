@@ -1143,6 +1143,83 @@ def test_prompt(
     raise typer.Exit(code=1)
 
 
+@app.command("server-endpoints")
+def server_endpoints(
+    ollama_api_base: str = typer.Option("http://127.0.0.1:11434", help="Forwarded Termux/Ollama API base URL."),
+    native_api_base: str = typer.Option("http://127.0.0.1:11435", help="Forwarded native llama.cpp API base URL."),
+    check: bool = typer.Option(True, "--check/--no-check", help="Probe the local forwarded endpoints for live status."),
+) -> None:
+    """Show how to access the live local server lanes."""
+    ollama_base = ollama_api_base.rstrip("/")
+    native_base = native_api_base.rstrip("/")
+
+    console.print("Server endpoints")
+    console.print("")
+    console.print("Termux/Ollama")
+    console.print(f"  URL: {ollama_base}")
+    console.print(f"  Models: {ollama_base}/api/tags")
+    console.print(f"  Generate: {ollama_base}/api/generate")
+    console.print("  Test: pro-ai-server test-prompt --profile lightweight")
+
+    if check:
+        tags_output = run_optional_command(list(build_ollama_tags_command(ollama_base)))
+        ollama_status = assess_ollama_server_status(tags_output)
+        _print_endpoint_status(ollama_status.ok, "  Status")
+        if ollama_status.model_names:
+            console.print("  Live models:")
+            for model in ollama_status.model_names:
+                console.print(f"    {model}")
+        else:
+            console.print("  Live models: none detected")
+        for warning in ollama_status.warnings:
+            console.print(f"  Warning: {warning}")
+
+    console.print("")
+    console.print("Native Android llama.cpp")
+    console.print(f"  URL: {native_base}")
+    console.print(f"  Health: {native_base}/health")
+    console.print(f"  Models: {native_base}/v1/models")
+    console.print(f"  Completion: {native_base}/completion")
+    console.print("  Test: pro-ai-server native-runtime-android-smoke --profile lightweight --prefer autocomplete --port 11435 --execute")
+
+    if check:
+        health_output = run_optional_command(list(_build_native_endpoint_health_command(native_base)))
+        native_ok = _native_llamacpp_health_ok(health_output)
+        native_loading = _native_llamacpp_health_loading(health_output)
+        if native_ok:
+            _print_endpoint_status(True, "  Status")
+        elif native_loading:
+            console.print("  Status: loading")
+        else:
+            _print_endpoint_status(False, "  Status")
+            if health_output.strip():
+                console.print(f"  Health response: {health_output.strip()}")
+
+        models_output = run_optional_command(list(_build_native_endpoint_models_command(native_base)))
+        native_models = _native_llamacpp_model_names(models_output)
+        if native_models:
+            console.print("  Live models:")
+            for model in native_models:
+                console.print(f"    {model}")
+        else:
+            console.print("  Live models: none detected")
+
+
+def _print_endpoint_status(ok: bool, label: str) -> None:
+    if ok:
+        console.print(f"{label}: [green]ready[/green]")
+    else:
+        console.print(f"{label}: [yellow]not ready[/yellow]")
+
+
+def _build_native_endpoint_health_command(api_base_url: str) -> tuple[str, ...]:
+    return ("curl", "--silent", "--show-error", "--max-time", "10", f"{api_base_url.rstrip('/')}/health")
+
+
+def _build_native_endpoint_models_command(api_base_url: str) -> tuple[str, ...]:
+    return ("curl", "--silent", "--show-error", "--max-time", "10", f"{api_base_url.rstrip('/')}/v1/models")
+
+
 @app.command("gateway-start")
 def gateway_start(
     host: str = typer.Option("127.0.0.1", help="Gateway bind host. Defaults to loopback."),

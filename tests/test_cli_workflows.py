@@ -1140,6 +1140,49 @@ def test_gateway_route_test_reads_config_file(tmp_path):
     assert "Model: custom-review:latest" in result.output
 
 
+def test_server_endpoints_prints_access_urls_without_checking():
+    runner = CliRunner()
+
+    result = runner.invoke(cli.app, ["server-endpoints", "--no-check"])
+
+    assert result.exit_code == 0
+    assert "Server endpoints" in result.output
+    assert "Termux/Ollama" in result.output
+    assert "URL: http://127.0.0.1:11434" in result.output
+    assert "Generate: http://127.0.0.1:11434/api/generate" in result.output
+    assert "Native Android llama.cpp" in result.output
+    assert "URL: http://127.0.0.1:11435" in result.output
+    assert "Completion: http://127.0.0.1:11435/completion" in result.output
+
+
+def test_server_endpoints_checks_live_models(monkeypatch):
+    runner = CliRunner()
+    commands = []
+
+    def fake_run_optional(command):
+        commands.append(command)
+        if command[-1].endswith("/api/tags"):
+            return '{"models":[{"name":"qwen2.5-coder:0.5b"},{"name":"qwen2.5-coder:1.5b"}]}'
+        if command[-1].endswith("/health"):
+            return '{"status":"ok"}'
+        if command[-1].endswith("/v1/models"):
+            return '{"data":[{"id":"qwen2.5-coder-0.5b-instruct-q4_k_m.gguf"}]}'
+        return ""
+
+    monkeypatch.setattr(cli, "run_optional_command", fake_run_optional)
+
+    result = runner.invoke(cli.app, ["server-endpoints"])
+
+    assert result.exit_code == 0
+    assert "Status: ready" in result.output
+    assert "qwen2.5-coder:0.5b" in result.output
+    assert "qwen2.5-coder:1.5b" in result.output
+    assert "qwen2.5-coder-0.5b-instruct-q4_k_m.gguf" in result.output
+    assert any(command[-1].endswith("/api/tags") for command in commands)
+    assert any(command[-1].endswith("/health") for command in commands)
+    assert any(command[-1].endswith("/v1/models") for command in commands)
+
+
 def test_gateway_proxy_test_reports_available_models(monkeypatch):
     runner = CliRunner()
 

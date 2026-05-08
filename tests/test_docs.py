@@ -71,6 +71,7 @@ def test_cli_workflow_documents_windows_first_flow_and_safety_claims():
         "pro-ai-server installer-ui",
         "pro-ai-server setup --execute --yes",
         "pro-ai-server diagnose --output",
+        "pro-ai-server server-endpoints",
         "pro-ai-server test-prompt",
         "scripts/smoke-production-installer.ps1",
     ):

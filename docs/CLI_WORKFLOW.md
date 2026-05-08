@@ -347,11 +347,12 @@ The default Android placement is `/data/local/tmp/pro-ai-server/native-runtime`,
 ## 15. Test Prompt
 
 ```powershell
+pro-ai-server server-endpoints
 pro-ai-server server-check
 pro-ai-server test-prompt
 ```
 
-`server-check` verifies `/api/tags` and required model inventory. `test-prompt` sends a small non-streaming `/api/generate` prompt through the configured endpoint and reports missing model, invalid JSON, empty output, or connection failures.
+`server-endpoints` prints the local access URLs for the Termux/Ollama lane on `127.0.0.1:11434` and the native Android llama.cpp lane on `127.0.0.1:11435`; by default it also probes the forwarded endpoints and lists live models when they are reachable. `server-check` verifies `/api/tags` and required model inventory. `test-prompt` sends a small non-streaming `/api/generate` prompt through the configured endpoint and reports missing model, invalid JSON, empty output, or connection failures.
 
 ## 16. Capture Diagnostics
 
