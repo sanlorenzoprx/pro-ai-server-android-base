@@ -24,6 +24,8 @@ Current scaffold:
 - `pro-ai-server native-runtime-android-install`
 - `pro-ai-server native-runtime-android-start`
 - `pro-ai-server native-runtime-android-status`
+- `pro-ai-server native-runtime-android-smoke`
+- `pro-ai-server native-runtime-android-smoke-path`
 - `pro-ai-server native-runtime-android-stop`
 
 ## Purpose
@@ -302,6 +304,14 @@ requests `adb forward tcp:11434 tcp:11434`.
 
 `native-runtime-android-status --execute` checks the remote PID file, process
 state, recent logs, and requested ADB forward.
+
+`native-runtime-android-smoke --execute` requests the same ADB forward, checks
+the forwarded `/api/tags` inventory, and sends a tiny non-streaming
+`/api/generate` prompt through the native Android runtime.
+
+`native-runtime-android-smoke-path --execute --yes` chains install, start, and
+smoke into one guarded operator path once the local `llama-server` binary and
+GGUF models are available.
 
 `native-runtime-android-stop --execute --yes` stops only the PID recorded in the
 remote PID file, removes that PID file, and removes the host ADB forward.

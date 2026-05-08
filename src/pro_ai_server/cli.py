@@ -107,10 +107,14 @@ from pro_ai_server.models import model_plan_for_profile, model_plan_for_ram
 from pro_ai_server.native_android import (
     DEFAULT_ANDROID_NATIVE_RUNTIME_ROOT,
     build_native_android_runtime_install_plan,
+    build_native_android_runtime_smoke_plan,
+    build_native_android_runtime_smoke_path_plan,
     build_native_android_runtime_start_plan,
     build_native_android_runtime_status_plan,
     build_native_android_runtime_stop_plan,
     render_native_android_runtime_install_plan,
+    render_native_android_runtime_smoke_plan,
+    render_native_android_runtime_smoke_path_plan,
     render_native_android_runtime_start_plan,
     render_native_android_runtime_status_plan,
     render_native_android_runtime_stop_plan,
@@ -2701,6 +2705,158 @@ def native_runtime_android_status(
         console.print("[red]Native Android runtime status failed while running ADB.[/red]")
         console.print(str(exc))
         raise typer.Exit(code=1) from exc
+
+
+@app.command("native-runtime-android-smoke")
+def native_runtime_android_smoke(
+    profile_name: str = typer.Option("professional", "--profile", help="Model profile to resolve."),
+    ram_gb: float | None = typer.Option(None, help="Optional RAM value used to select a profile."),
+    prefer: str = typer.Option("chat", help="Resolve the chat or autocomplete runtime lane."),
+    models_root: Path = typer.Option(Path("models"), help="Root directory containing GGUF model files."),
+    manifest_path: Path | None = typer.Option(None, "--manifest", help="Optional native runtime manifest JSON path."),
+    remote_root: str = typer.Option(DEFAULT_ANDROID_NATIVE_RUNTIME_ROOT, help="Android remote runtime root."),
+    serial: str | None = typer.Option(None, help="ADB device serial to use when multiple phones are connected."),
+    prompt: str = typer.Option(DEFAULT_TEST_PROMPT, help="Small prompt to send to /api/generate."),
+    execute: bool = typer.Option(False, "--execute", help="Run the ADB forward and local runtime smoke requests."),
+) -> None:
+    """Smoke-test the forwarded native Android runtime with /api/tags and /api/generate."""
+    adb = resolve_adb()
+    if not adb:
+        console.print("[red]adb not found. Release builds should include bundled platform-tools.[/red]")
+        raise typer.Exit(code=1)
+    try:
+        selected_serial = select_device_serial(adb, serial)
+        plan = model_plan_for_ram(ram_gb) if ram_gb is not None else model_plan_for_profile(profile_name)
+        manifest = load_native_runtime_manifest(manifest_path)
+        config = build_native_runtime_config_for_model_plan(
+            plan,
+            models_root=models_root,
+            prefer=prefer,
+            manifest=manifest,
+        )
+        smoke_plan = build_native_android_runtime_smoke_plan(
+            config,
+            remote_root=remote_root,
+            serial=selected_serial,
+            prompt=prompt,
+        )
+    except (CommandError, ValueError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    for line in render_native_android_runtime_smoke_plan(smoke_plan):
+        console.print(line)
+
+    if not execute:
+        console.print("Plan only. Re-run with --execute after install/start to smoke-test the native Android runtime.")
+        return
+
+    _execute_native_android_smoke(smoke_plan, adb)
+
+
+def _execute_native_android_smoke(smoke_plan, adb: str) -> None:
+    try:
+        run_command([adb, *list(smoke_plan.commands[0][1:])])
+    except CommandError as exc:
+        console.print("[red]Native Android runtime smoke failed while setting ADB forward.[/red]")
+        console.print(str(exc))
+        raise typer.Exit(code=1) from exc
+
+    tags_output = run_optional_command(list(smoke_plan.commands[1]))
+    server_status = assess_ollama_server_status(tags_output)
+    console.print(f"Runtime API: {smoke_plan.api_base.rstrip('/')}")
+    if server_status.model_names:
+        console.print("Models:")
+        for model in server_status.model_names:
+            console.print(f"  {model}")
+    else:
+        console.print("Models: none detected")
+
+    if not server_status.ok:
+        for warning in server_status.warnings:
+            console.print(f"[yellow]Warning:[/yellow] {warning}")
+        for instruction in server_status.instructions:
+            console.print(f"Next: {instruction}")
+        raise typer.Exit(code=1)
+
+    generate_output = run_optional_command(list(smoke_plan.commands[2]))
+    prompt_status = assess_ollama_test_prompt_response(smoke_plan.model, generate_output)
+    if prompt_status.ok:
+        console.print("[green]Native Android runtime smoke succeeded.[/green]")
+        console.print(f"Response: {prompt_status.response}")
+        return
+
+    for warning in prompt_status.warnings:
+        console.print(f"[yellow]Warning:[/yellow] {warning}")
+    for instruction in prompt_status.instructions:
+        console.print(f"Next: {instruction}")
+    raise typer.Exit(code=1)
+
+
+@app.command("native-runtime-android-smoke-path")
+def native_runtime_android_smoke_path(
+    profile_name: str = typer.Option("professional", "--profile", help="Model profile to resolve."),
+    ram_gb: float | None = typer.Option(None, help="Optional RAM value used to select a profile."),
+    prefer: str = typer.Option("chat", help="Resolve the chat or autocomplete runtime lane."),
+    models_root: Path = typer.Option(Path("models"), help="Root directory containing GGUF model files."),
+    manifest_path: Path | None = typer.Option(None, "--manifest", help="Optional native runtime manifest JSON path."),
+    llama_server: Path = typer.Option(Path("llama-server"), help="Local llama.cpp server executable path."),
+    remote_root: str = typer.Option(DEFAULT_ANDROID_NATIVE_RUNTIME_ROOT, help="Android remote runtime root."),
+    serial: str | None = typer.Option(None, help="ADB device serial to use when multiple phones are connected."),
+    prompt: str = typer.Option(DEFAULT_TEST_PROMPT, help="Small prompt to send to /api/generate."),
+    execute: bool = typer.Option(False, "--execute", help="Run install, start, and smoke commands."),
+    yes: bool = typer.Option(False, "--yes", help="Confirm phone mutation when using --execute."),
+) -> None:
+    """Run the guarded Android native install/start/smoke path."""
+    adb = resolve_adb()
+    if not adb:
+        console.print("[red]adb not found. Release builds should include bundled platform-tools.[/red]")
+        raise typer.Exit(code=1)
+    try:
+        selected_serial = select_device_serial(adb, serial)
+        plan = model_plan_for_ram(ram_gb) if ram_gb is not None else model_plan_for_profile(profile_name)
+        manifest = load_native_runtime_manifest(manifest_path)
+        config = build_native_runtime_config_for_model_plan(
+            plan,
+            models_root=models_root,
+            prefer=prefer,
+            manifest=manifest,
+        )
+        smoke_path_plan = build_native_android_runtime_smoke_path_plan(
+            config,
+            manifest,
+            local_llama_server=llama_server,
+            local_manifest=manifest_path or package_root() / "native-runtime-manifest.json",
+            remote_root=remote_root,
+            serial=selected_serial,
+            prompt=prompt,
+        )
+    except (CommandError, ValueError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    for line in render_native_android_runtime_smoke_path_plan(smoke_path_plan):
+        console.print(line)
+
+    if not execute:
+        console.print("Plan only. Re-run with --execute --yes to install, start, and smoke-test the runtime.")
+        return
+    if not yes:
+        console.print("[red]Refusing to run native Android smoke path without --yes.[/red]")
+        raise typer.Exit(code=1)
+
+    try:
+        for command in smoke_path_plan.install_plan.commands:
+            run_command([adb, *list(command[1:])])
+        for command in smoke_path_plan.start_plan.commands:
+            run_command([adb, *list(command[1:])])
+    except CommandError as exc:
+        console.print("[red]Native Android runtime smoke path failed while running ADB.[/red]")
+        console.print(str(exc))
+        raise typer.Exit(code=1) from exc
+
+    console.print(f"[green]Installed and started native Android runtime on device {selected_serial}.[/green]")
+    _execute_native_android_smoke(smoke_path_plan.smoke_plan, adb)
 
 
 @app.command("native-runtime-android-stop")

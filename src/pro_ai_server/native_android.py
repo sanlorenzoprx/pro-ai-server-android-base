@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
 from pro_ai_server.native_runtime import NativeRuntimeConfig, NativeRuntimeManifest
+from pro_ai_server.ollama import DEFAULT_TEST_PROMPT, build_ollama_generate_command, build_ollama_tags_command
 
 
 Command = tuple[str, ...]
@@ -53,6 +54,22 @@ class NativeAndroidRuntimeStopPlan:
     layout: NativeAndroidRuntimeLayout
     commands: tuple[Command, ...]
     remote_pid_file: PurePosixPath
+
+
+@dataclass(frozen=True)
+class NativeAndroidRuntimeSmokePlan:
+    layout: NativeAndroidRuntimeLayout
+    commands: tuple[Command, ...]
+    api_base: str
+    model: str
+    prompt: str
+
+
+@dataclass(frozen=True)
+class NativeAndroidRuntimeSmokePathPlan:
+    install_plan: NativeAndroidRuntimeInstallPlan
+    start_plan: NativeAndroidRuntimeStartPlan
+    smoke_plan: NativeAndroidRuntimeSmokePlan
 
 
 def build_native_android_runtime_layout(
@@ -179,6 +196,61 @@ def build_native_android_runtime_stop_plan(
     )
 
 
+def build_native_android_runtime_smoke_plan(
+    config: NativeRuntimeConfig,
+    *,
+    remote_root: str = DEFAULT_ANDROID_NATIVE_RUNTIME_ROOT,
+    serial: str | None = None,
+    prompt: str = DEFAULT_TEST_PROMPT,
+) -> NativeAndroidRuntimeSmokePlan:
+    layout = build_native_android_runtime_layout(config, remote_root=remote_root)
+    api_base = config.api_base
+    return NativeAndroidRuntimeSmokePlan(
+        layout=layout,
+        commands=(
+            _adb_command(("forward", f"tcp:{config.port}", f"tcp:{config.port}"), serial),
+            build_ollama_tags_command(api_base),
+            build_ollama_generate_command(config.model.contract_name, prompt=prompt, api_base_url=api_base),
+        ),
+        api_base=api_base,
+        model=config.model.contract_name,
+        prompt=prompt,
+    )
+
+
+def build_native_android_runtime_smoke_path_plan(
+    config: NativeRuntimeConfig,
+    manifest: NativeRuntimeManifest,
+    *,
+    local_llama_server: Path,
+    local_manifest: Path,
+    remote_root: str = DEFAULT_ANDROID_NATIVE_RUNTIME_ROOT,
+    serial: str | None = None,
+    prompt: str = DEFAULT_TEST_PROMPT,
+) -> NativeAndroidRuntimeSmokePathPlan:
+    return NativeAndroidRuntimeSmokePathPlan(
+        install_plan=build_native_android_runtime_install_plan(
+            config,
+            manifest,
+            local_llama_server=local_llama_server,
+            local_manifest=local_manifest,
+            remote_root=remote_root,
+            serial=serial,
+        ),
+        start_plan=build_native_android_runtime_start_plan(
+            config,
+            remote_root=remote_root,
+            serial=serial,
+        ),
+        smoke_plan=build_native_android_runtime_smoke_plan(
+            config,
+            remote_root=remote_root,
+            serial=serial,
+            prompt=prompt,
+        ),
+    )
+
+
 def render_native_android_runtime_install_plan(plan: NativeAndroidRuntimeInstallPlan) -> tuple[str, ...]:
     lines = [
         "Native Android runtime install plan",
@@ -226,6 +298,26 @@ def render_native_android_runtime_start_plan(plan: NativeAndroidRuntimeStartPlan
         "Commands:",
     ]
     lines.extend(" ".join(command) for command in plan.commands)
+    return tuple(lines)
+
+
+def render_native_android_runtime_smoke_plan(plan: NativeAndroidRuntimeSmokePlan) -> tuple[str, ...]:
+    lines = [
+        "Native Android runtime smoke plan",
+        f"Remote root: {plan.layout.root}",
+        f"API base: {plan.api_base}",
+        f"Test model: {plan.model}",
+        "Commands:",
+    ]
+    lines.extend(" ".join(command) for command in plan.commands)
+    return tuple(lines)
+
+
+def render_native_android_runtime_smoke_path_plan(plan: NativeAndroidRuntimeSmokePathPlan) -> tuple[str, ...]:
+    lines = ["Native Android runtime smoke path"]
+    lines.extend(render_native_android_runtime_install_plan(plan.install_plan))
+    lines.extend(render_native_android_runtime_start_plan(plan.start_plan))
+    lines.extend(render_native_android_runtime_smoke_plan(plan.smoke_plan))
     return tuple(lines)
 
 

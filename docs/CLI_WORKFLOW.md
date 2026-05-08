@@ -323,6 +323,18 @@ Inspect the remote PID/log lane:
 pro-ai-server native-runtime-android-status --profile professional --serial <device-serial> --execute
 ```
 
+Smoke-test the forwarded runtime with `/api/tags` and a tiny non-streaming `/api/generate` request:
+
+```powershell
+pro-ai-server native-runtime-android-smoke --profile professional --serial <device-serial> --execute
+```
+
+Run the guarded one-shot path when assets are available locally:
+
+```powershell
+pro-ai-server native-runtime-android-smoke-path --profile professional --serial <device-serial> --llama-server C:\path\to\llama-server --models-root C:\path\to\models --execute --yes
+```
+
 Stop the recorded remote PID and remove the host forward:
 
 ```powershell

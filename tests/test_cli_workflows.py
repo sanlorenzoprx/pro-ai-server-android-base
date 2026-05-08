@@ -2824,6 +2824,133 @@ def test_native_runtime_android_status_executes_adb_commands(monkeypatch):
     assert "running:1234" in result.output
 
 
+def test_native_runtime_android_smoke_prints_plan_without_execute(monkeypatch):
+    runner = CliRunner()
+
+    monkeypatch.setattr(cli, "resolve_adb", lambda: "adb")
+    monkeypatch.setattr(cli, "select_device_serial", lambda adb, serial: "ABC123")
+
+    result = runner.invoke(cli.app, ["native-runtime-android-smoke"])
+
+    assert result.exit_code == 0
+    assert "Native Android runtime smoke plan" in result.output
+    assert "/api/tags" in result.output
+    assert "/api/generate" in result.output
+    assert "Plan only" in result.output
+
+
+def test_native_runtime_android_smoke_executes_forward_and_prompt(monkeypatch):
+    runner = CliRunner()
+    commands = []
+
+    def fake_run_command(command):
+        commands.append(command)
+        return ""
+
+    def fake_run_optional(command):
+        commands.append(command)
+        if command[-1].endswith("/api/tags"):
+            return '{"models":[{"name":"qwen2.5-coder:3b"}]}'
+        return '{"response":"pro-ai-server-ready"}'
+
+    monkeypatch.setattr(cli, "resolve_adb", lambda: "adb")
+    monkeypatch.setattr(cli, "select_device_serial", lambda adb, serial: "ABC123")
+    monkeypatch.setattr(cli, "run_command", fake_run_command)
+    monkeypatch.setattr(cli, "run_optional_command", fake_run_optional)
+
+    result = runner.invoke(cli.app, ["native-runtime-android-smoke", "--execute"])
+
+    assert result.exit_code == 0
+    assert ["adb", "-s", "ABC123", "forward", "tcp:11434", "tcp:11434"] in commands
+    assert any(command[-1].endswith("/api/tags") for command in commands)
+    assert any(command[-1].endswith("/api/generate") for command in commands)
+    assert "Native Android runtime smoke succeeded" in result.output
+    assert "pro-ai-server-ready" in result.output
+
+
+def test_native_runtime_android_smoke_fails_when_tags_are_not_ready(monkeypatch):
+    runner = CliRunner()
+
+    monkeypatch.setattr(cli, "resolve_adb", lambda: "adb")
+    monkeypatch.setattr(cli, "select_device_serial", lambda adb, serial: "ABC123")
+    monkeypatch.setattr(cli, "run_command", lambda command: "")
+    monkeypatch.setattr(cli, "run_optional_command", lambda command: "connection refused")
+
+    result = runner.invoke(cli.app, ["native-runtime-android-smoke", "--execute"])
+
+    assert result.exit_code == 1
+    assert "Ollama tags request failed" in result.output
+
+
+def test_native_runtime_android_smoke_path_prints_plan_without_execute(monkeypatch):
+    runner = CliRunner()
+
+    monkeypatch.setattr(cli, "resolve_adb", lambda: "adb")
+    monkeypatch.setattr(cli, "select_device_serial", lambda adb, serial: "ABC123")
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "native-runtime-android-smoke-path",
+            "--profile",
+            "professional",
+            "--models-root",
+            "models",
+            "--llama-server",
+            "llama-server",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Native Android runtime smoke path" in result.output
+    assert "Native Android runtime install plan" in result.output
+    assert "Native Android runtime start plan" in result.output
+    assert "Native Android runtime smoke plan" in result.output
+    assert "Plan only" in result.output
+
+
+def test_native_runtime_android_smoke_path_refuses_execute_without_yes(monkeypatch):
+    runner = CliRunner()
+
+    monkeypatch.setattr(cli, "resolve_adb", lambda: "adb")
+    monkeypatch.setattr(cli, "select_device_serial", lambda adb, serial: "ABC123")
+
+    result = runner.invoke(cli.app, ["native-runtime-android-smoke-path", "--execute"])
+
+    assert result.exit_code == 1
+    assert "without --yes" in result.output
+
+
+def test_native_runtime_android_smoke_path_executes_install_start_and_smoke(monkeypatch):
+    runner = CliRunner()
+    commands = []
+
+    def fake_run_command(command):
+        commands.append(command)
+        return ""
+
+    def fake_run_optional(command):
+        commands.append(command)
+        if command[-1].endswith("/api/tags"):
+            return '{"models":[{"name":"qwen2.5-coder:3b"}]}'
+        return '{"response":"pro-ai-server-ready"}'
+
+    monkeypatch.setattr(cli, "resolve_adb", lambda: "adb")
+    monkeypatch.setattr(cli, "select_device_serial", lambda adb, serial: "ABC123")
+    monkeypatch.setattr(cli, "run_command", fake_run_command)
+    monkeypatch.setattr(cli, "run_optional_command", fake_run_optional)
+
+    result = runner.invoke(cli.app, ["native-runtime-android-smoke-path", "--execute", "--yes"])
+
+    assert result.exit_code == 0
+    assert any(command[:4] == ["adb", "-s", "ABC123", "push"] for command in commands)
+    assert any(command[:4] == ["adb", "-s", "ABC123", "shell"] for command in commands)
+    assert any(command[-1].endswith("/api/tags") for command in commands)
+    assert any(command[-1].endswith("/api/generate") for command in commands)
+    assert "Installed and started native Android runtime" in result.output
+    assert "Native Android runtime smoke succeeded" in result.output
+
+
 def test_native_runtime_android_stop_prints_plan_without_execute(monkeypatch):
     runner = CliRunner()
 
