@@ -103,8 +103,8 @@ Evidence log:
 | Evidence | Filename Or Command Output Summary | Status | Notes |
 |---|---|---|---|
 | Phone photo | TBD | blocked | Show USB-connected Android phone |
-| Terminal smoke output | TKT-P22-001 report | completed | Scan, plan, Termux check, tunnel, status, server-check, and test-prompt summarized |
-| Test prompt response | TBD | blocked | Record prompt and short response summary |
+| Terminal smoke output | TKT-P22-001 report; 2026-05-08 live Moto smoke | completed | Scan, plan, Termux check, tunnel, status, server-check, and test-prompt summarized |
+| Test prompt response | `pro-ai-server test-prompt --profile lightweight` | completed | Moto `ZY22GKMWPN` returned `pro-ai-server-ready` |
 | Diagnostics file | `diagnostics.txt` | blocked | Attach when generated |
 
 Failure notes:
@@ -150,6 +150,40 @@ Evidence:
 - `pro-ai-server test-prompt --profile lightweight` passed with response `pro-ai-server-ready`.
 
 Release impact: the narrow local endpoint proof is now real on the Moto g 5G yellow/lightweight lane. The remaining product work is to fold the manual recovery into first-run automation and rerun packaged-exe smoke with the corrected `adb forward` tunnel.
+
+### 2026-05-08: Moto g 5G Live Baseline Recheck
+
+Status: `completed` for the current Termux/Ollama lightweight USB lane.
+
+Evidence:
+
+- Device `ZY22GKMWPN` was connected and authorized over bundled ADB.
+- Device identity: motorola moto g 5G (2022), Android 13, arm64-v8a.
+- USB tunnel was active: `adb forward tcp:11434 tcp:11434`.
+- `pro-ai-server status` reported phone connected, USB tunnel active, USB/local exposure only, Ollama responding on `/api/tags`, and Continue ready in VS Code and Cursor.
+- `curl http://127.0.0.1:11434/api/tags` returned 2 visible models:
+  - `qwen2.5-coder:0.5b`
+  - `qwen2.5-coder:1.5b`
+- `pro-ai-server server-check --profile lightweight` passed.
+- `pro-ai-server test-prompt --profile lightweight` passed with response `pro-ai-server-ready`.
+
+Current live baseline checklist:
+
+- Termux/Ollama lightweight lane works.
+- Native Android lane exists but awaits assets.
+- Next blocker: acquire/place `llama-server` plus GGUF files, then rerun `native-runtime-assets` and `native-runtime-android-smoke-path`.
+
+Native asset acquisition targets:
+
+- Android-compatible `llama-server`.
+- Lightweight GGUF files:
+  - `qwen2.5-coder-1.5b-instruct-q4_k_m.gguf`
+  - `qwen2.5-coder-0.5b-instruct-q4_k_m.gguf`
+- Professional GGUF files:
+  - `qwen2.5-coder-3b-instruct-q4_k_m.gguf`
+  - `qwen2.5-coder-1.5b-base-q4_k_m.gguf`
+
+Release impact: the customer-facing Termux/Ollama lightweight lane is live on the Moto baseline. The native Android lane is structurally ready in CLI/docs/tests, but not live-smoked until the Android `llama-server` binary and selected GGUF assets are acquired and placed.
 
 ## Hardware Smoke Attempts
 
