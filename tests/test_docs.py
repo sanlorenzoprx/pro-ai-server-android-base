@@ -56,6 +56,7 @@ def test_cli_workflow_documents_windows_first_flow_and_safety_claims():
         "pro-ai-server setup-tailscale",
         "pro-ai-server status",
         "pro-ai-server native-runtime-config --profile professional --prefer chat",
+        "pro-ai-server native-runtime-assets --profile professional",
         "pro-ai-server native-runtime-doctor --profile professional",
         "pro-ai-server native-runtime-android-plan",
         "pro-ai-server native-runtime-android-install",

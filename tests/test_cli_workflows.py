@@ -2367,6 +2367,58 @@ def test_native_runtime_config_rejects_invalid_preference():
     assert "prefer value must be 'chat' or 'autocomplete'" in result.output
 
 
+def test_native_runtime_assets_reports_missing_inputs(tmp_path):
+    runner = CliRunner()
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "native-runtime-assets",
+            "--profile",
+            "professional",
+            "--models-root",
+            str(tmp_path / "models"),
+            "--llama-server",
+            str(tmp_path / "llama-server"),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "Native runtime asset readiness" in result.output
+    assert "Ready: False" in result.output
+    assert "Missing llama-server" in result.output
+    assert "qwen2.5-coder-3b-instruct-q4_k_m.gguf" in result.output
+
+
+def test_native_runtime_assets_passes_when_profile_assets_exist(tmp_path):
+    runner = CliRunner()
+    llama_server = tmp_path / "llama-server"
+    models_root = tmp_path / "models"
+    models_root.mkdir()
+    llama_server.write_text("binary", encoding="utf-8")
+    (models_root / "qwen2.5-coder-1.5b-instruct-q4_k_m.gguf").write_text("chat", encoding="utf-8")
+    (models_root / "qwen2.5-coder-0.5b-instruct-q4_k_m.gguf").write_text("autocomplete", encoding="utf-8")
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "native-runtime-assets",
+            "--profile",
+            "lightweight",
+            "--models-root",
+            str(models_root),
+            "--llama-server",
+            str(llama_server),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Ready: True" in result.output
+    assert "OK llama-server" in result.output
+    assert "OK model:qwen2.5-coder-1.5b-instruct-q4_k_m.gguf" in result.output
+    assert "OK model:qwen2.5-coder-0.5b-instruct-q4_k_m.gguf" in result.output
+
+
 def test_native_runtime_plan_reports_missing_inputs():
     runner = CliRunner()
 

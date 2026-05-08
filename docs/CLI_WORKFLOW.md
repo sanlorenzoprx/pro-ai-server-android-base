@@ -296,6 +296,7 @@ pro-ai-server native-runtime-config --profile professional --prefer chat
 Run a read-only local preflight over manifest, profile, launch plan, lifecycle state, and `/api/tags` readiness:
 
 ```powershell
+pro-ai-server native-runtime-assets --profile professional --llama-server C:\path\to\llama-server --models-root C:\path\to\models
 pro-ai-server native-runtime-doctor --profile professional
 ```
 

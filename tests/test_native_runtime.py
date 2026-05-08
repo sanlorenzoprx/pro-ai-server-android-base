@@ -12,6 +12,7 @@ from pro_ai_server.native_runtime import (
     NativeRuntimeModel,
     NativeRuntimeProfileDefaults,
     build_llama_server_command,
+    build_native_runtime_asset_report,
     build_native_runtime_config_for_model_plan,
     build_native_runtime_doctor_report,
     build_native_runtime_lifecycle_status,
@@ -26,6 +27,7 @@ from pro_ai_server.native_runtime import (
     load_native_runtime_manifest,
     native_runtime_defaults_for_profile,
     remove_native_runtime_state,
+    render_native_runtime_asset_report,
     render_native_runtime_launch_plan,
     render_native_runtime_lifecycle_status,
     render_native_runtime_doctor_report,
@@ -239,6 +241,47 @@ def test_build_native_runtime_config_for_model_plan_can_prefer_autocomplete_mode
 
     assert config.model.contract_name == "qwen2.5-coder:0.5b"
     assert config.model.gguf_path == Path("bundled-models") / "qwen2.5-coder-0.5b-instruct-q4_k_m.gguf"
+
+
+def test_build_native_runtime_asset_report_checks_binary_and_profile_models(tmp_path):
+    llama_server = tmp_path / "llama-server"
+    models_root = tmp_path / "models"
+    model_file = models_root / "qwen2.5-coder-3b-instruct-q4_k_m.gguf"
+    llama_server.write_text("binary", encoding="utf-8")
+    models_root.mkdir()
+    model_file.write_text("model", encoding="utf-8")
+
+    report = build_native_runtime_asset_report(
+        "professional",
+        models_root=models_root,
+        executable=llama_server,
+    )
+
+    assert not report.ready
+    assert [check.key for check in report.checks] == [
+        "llama-server",
+        "model:qwen2.5-coder-3b-instruct-q4_k_m.gguf",
+        "model:qwen2.5-coder-1.5b-base-q4_k_m.gguf",
+    ]
+    assert report.checks[0].ok is True
+    assert report.checks[1].ok is True
+    assert report.checks[2].ok is False
+
+
+def test_render_native_runtime_asset_report_is_operator_readable(tmp_path):
+    report = build_native_runtime_asset_report(
+        "lightweight",
+        models_root=tmp_path / "models",
+        executable=tmp_path / "llama-server",
+    )
+
+    rendered = "\n".join(render_native_runtime_asset_report(report))
+
+    assert "Native runtime asset readiness" in rendered
+    assert "Ready: False" in rendered
+    assert "Profile: lightweight" in rendered
+    assert "Missing llama-server" in rendered
+    assert "Next: place missing assets" in rendered
 
 
 def test_build_native_runtime_config_for_model_plan_rejects_invalid_preference():

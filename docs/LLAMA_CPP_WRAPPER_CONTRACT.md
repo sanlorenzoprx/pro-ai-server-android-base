@@ -15,6 +15,7 @@ Current scaffold:
 - [src/pro_ai_server/native_runtime.py](/abs/c:/repos/pro-ai-server-android-base/src/pro_ai_server/native_runtime.py)
 - [src/pro_ai_server/native-runtime-manifest.json](/abs/c:/repos/pro-ai-server-android-base/src/pro_ai_server/native-runtime-manifest.json)
 - `pro-ai-server native-runtime-config --profile professional --prefer chat`
+- `pro-ai-server native-runtime-assets --profile professional`
 - `pro-ai-server native-runtime-plan --profile professional`
 - `pro-ai-server native-runtime-start --profile professional`
 - `pro-ai-server native-runtime-status`

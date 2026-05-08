@@ -125,6 +125,25 @@ class NativeRuntimeDoctorReport:
 
 
 @dataclass(frozen=True)
+class NativeRuntimeAssetCheck:
+    key: str
+    path: Path
+    ok: bool
+    detail: str
+
+
+@dataclass(frozen=True)
+class NativeRuntimeAssetReport:
+    manifest: NativeRuntimeManifest
+    profile: str
+    checks: tuple[NativeRuntimeAssetCheck, ...]
+
+    @property
+    def ready(self) -> bool:
+        return all(check.ok for check in self.checks)
+
+
+@dataclass(frozen=True)
 class NativeRuntimeError:
     error: str
     message: str
@@ -281,6 +300,30 @@ def build_native_runtime_launch_plan(
     return NativeRuntimeLaunchPlan(config=config, command=command, checks=checks)
 
 
+def build_native_runtime_asset_report(
+    profile: str,
+    *,
+    models_root: Path = Path("models"),
+    executable: Path = Path("llama-server"),
+    manifest: NativeRuntimeManifest | None = None,
+) -> NativeRuntimeAssetReport:
+    runtime_manifest = manifest or load_native_runtime_manifest()
+    defaults = native_runtime_defaults_for_profile(profile, manifest=runtime_manifest)
+    model_files = _unique_model_filenames(defaults)
+    checks = [
+        _asset_check("llama-server", executable, "llama.cpp server executable"),
+    ]
+    checks.extend(
+        _asset_check(f"model:{filename}", models_root / filename, "GGUF model file")
+        for filename in model_files
+    )
+    return NativeRuntimeAssetReport(
+        manifest=runtime_manifest,
+        profile=profile.strip().lower(),
+        checks=tuple(checks),
+    )
+
+
 def render_native_runtime_launch_plan(plan: NativeRuntimeLaunchPlan) -> tuple[str, ...]:
     lines = [
         "Native runtime launch plan",
@@ -293,6 +336,22 @@ def render_native_runtime_launch_plan(plan: NativeRuntimeLaunchPlan) -> tuple[st
         f"- {'OK' if check.ok else 'Missing'} {check.key}: {check.detail}"
         for check in plan.checks
     )
+    return tuple(lines)
+
+
+def render_native_runtime_asset_report(report: NativeRuntimeAssetReport) -> tuple[str, ...]:
+    lines = [
+        "Native runtime asset readiness",
+        f"Ready: {report.ready}",
+        f"Engine: {report.manifest.engine}",
+        f"Profile: {report.profile}",
+    ]
+    lines.extend(
+        f"- {'OK' if check.ok else 'Missing'} {check.key}: {check.detail}"
+        for check in report.checks
+    )
+    if not report.ready:
+        lines.append("Next: place missing assets at the shown paths, then rerun this command before Android smoke.")
     return tuple(lines)
 
 
@@ -563,6 +622,22 @@ def _path_check(key: str, path: Path, label: str) -> NativeRuntimeLaunchCheck:
     if path.exists():
         return NativeRuntimeLaunchCheck(key=key, ok=True, detail=f"{label} found at {path}")
     return NativeRuntimeLaunchCheck(key=key, ok=False, detail=f"{label} not found at {path}")
+
+
+def _asset_check(key: str, path: Path, label: str) -> NativeRuntimeAssetCheck:
+    if path.exists():
+        return NativeRuntimeAssetCheck(key=key, path=path, ok=True, detail=f"{label} found at {path}")
+    return NativeRuntimeAssetCheck(key=key, path=path, ok=False, detail=f"{label} not found at {path}")
+
+
+def _unique_model_filenames(defaults: NativeRuntimeProfileDefaults) -> tuple[str, ...]:
+    seen: set[str] = set()
+    filenames: list[str] = []
+    for filename in (defaults.chat_model_filename, defaults.autocomplete_model_filename):
+        if filename not in seen:
+            seen.add(filename)
+            filenames.append(filename)
+    return tuple(filenames)
 
 
 def _fetch_tags(api_base: str) -> str:
