@@ -72,6 +72,42 @@ def test_build_native_android_runtime_install_plan_includes_serial_and_pushes_as
     assert ("adb", "-s", "ABC123", "forward", "tcp:11434", "tcp:11434") in plan.commands
 
 
+def test_build_native_android_runtime_install_plan_pushes_sibling_support_libraries(tmp_path):
+    manifest = load_native_runtime_manifest()
+    config = build_native_runtime_config_for_model_plan(
+        model_plan_for_profile("lightweight"),
+        models_root=Path("models"),
+        prefer="autocomplete",
+        manifest=manifest,
+    )
+    binary = tmp_path / "llama-server"
+    library_a = tmp_path / "libggml.so"
+    library_b = tmp_path / "libllama-common.so"
+    binary.write_text("binary")
+    library_b.write_text("lib")
+    library_a.write_text("lib")
+
+    plan = build_native_android_runtime_install_plan(
+        config,
+        manifest,
+        local_llama_server=binary,
+        local_manifest=Path("native-runtime-manifest.json"),
+        remote_root="/data/local/tmp/pro-ai",
+        serial="ABC123",
+    )
+
+    assert plan.support_libraries == (library_a, library_b)
+    assert ("adb", "-s", "ABC123", "push", str(library_a), "/data/local/tmp/pro-ai/bin/libggml.so") in plan.commands
+    assert (
+        "adb",
+        "-s",
+        "ABC123",
+        "push",
+        str(library_b),
+        "/data/local/tmp/pro-ai/bin/libllama-common.so",
+    ) in plan.commands
+
+
 def test_render_native_android_runtime_install_plan_is_operator_readable():
     manifest = load_native_runtime_manifest()
     config = build_native_runtime_config_for_model_plan(model_plan_for_profile("professional"), manifest=manifest)
@@ -105,6 +141,7 @@ def test_build_native_android_runtime_start_plan_runs_remote_llama_server_and_fo
     assert plan.commands[0][0:4] == ("adb", "-s", "ABC123", "shell")
     assert "/data/local/tmp/pro-ai/bin/llama-server" in plan.remote_start_shell
     assert "--model /data/local/tmp/pro-ai/models/qwen2.5-coder-3b-instruct-q4_k_m.gguf" in plan.remote_start_shell
+    assert "export LD_LIBRARY_PATH=/data/local/tmp/pro-ai/bin:$LD_LIBRARY_PATH" in plan.remote_start_shell
     assert "nohup" in plan.remote_start_shell
     assert "echo $!" in plan.remote_start_shell
     assert plan.commands[1] == ("adb", "-s", "ABC123", "forward", "tcp:11434", "tcp:11434")
@@ -177,18 +214,28 @@ def test_build_native_android_runtime_smoke_plan_checks_forwarded_api():
     )
 
     assert plan.commands[0] == ("adb", "-s", "ABC123", "forward", "tcp:11434", "tcp:11434")
-    assert plan.commands[1] == ("curl", "--silent", "--show-error", "http://127.0.0.1:11434/api/tags")
-    assert plan.commands[2][0:7] == (
+    assert plan.commands[1] == ("curl", "--silent", "--show-error", "--max-time", "30", "http://127.0.0.1:11434/health")
+    assert plan.commands[2] == (
         "curl",
         "--silent",
         "--show-error",
+        "--max-time",
+        "30",
+        "http://127.0.0.1:11434/v1/models",
+    )
+    assert plan.commands[3][0:9] == (
+        "curl",
+        "--silent",
+        "--show-error",
+        "--max-time",
+        "90",
         "-X",
         "POST",
         "-H",
         "Content-Type: application/json",
     )
-    assert "qwen2.5-coder:3b" in plan.commands[2][8]
-    assert "ready?" in plan.commands[2][8]
+    assert "ready?" in plan.commands[3][10]
+    assert plan.commands[3][-1] == "http://127.0.0.1:11434/completion"
 
 
 def test_render_native_android_runtime_smoke_plan_is_operator_readable():
@@ -199,7 +246,7 @@ def test_render_native_android_runtime_smoke_plan_is_operator_readable():
 
     assert "Native Android runtime smoke plan" in rendered
     assert "API base:" in rendered
-    assert "Test model:" in rendered
+    assert "Expected model:" in rendered
     assert "Commands:" in rendered
 
 

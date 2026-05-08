@@ -2705,6 +2705,8 @@ def test_native_runtime_android_plan_prints_adb_asset_plan():
             "models",
             "--llama-server",
             "llama-server",
+            "--port",
+            "11435",
             "--remote-root",
             "/data/local/tmp/pro-ai",
             "--serial",
@@ -2716,7 +2718,7 @@ def test_native_runtime_android_plan_prints_adb_asset_plan():
     assert "Native Android runtime install plan" in result.output
     assert "/data/local/tmp/pro-ai/bin/llama-server" in result.output
     assert "adb -s ABC123 push llama-server" in result.output
-    assert "adb -s ABC123 forward tcp:11434 tcp:11434" in result.output
+    assert "adb -s ABC123 forward tcp:11435 tcp:11435" in result.output
 
 
 def test_native_runtime_android_install_prints_plan_without_execute(monkeypatch):
@@ -2889,8 +2891,9 @@ def test_native_runtime_android_smoke_prints_plan_without_execute(monkeypatch):
 
     assert result.exit_code == 0
     assert "Native Android runtime smoke plan" in result.output
-    assert "/api/tags" in result.output
-    assert "/api/generate" in result.output
+    assert "/health" in result.output
+    assert "/v1/models" in result.output
+    assert "/completion" in result.output
     assert "Plan only" in result.output
 
 
@@ -2904,9 +2907,11 @@ def test_native_runtime_android_smoke_executes_forward_and_prompt(monkeypatch):
 
     def fake_run_optional(command):
         commands.append(command)
-        if command[-1].endswith("/api/tags"):
-            return '{"models":[{"name":"qwen2.5-coder:3b"}]}'
-        return '{"response":"pro-ai-server-ready"}'
+        if command[-1].endswith("/health"):
+            return '{"status":"ok"}'
+        if command[-1].endswith("/v1/models"):
+            return '{"data":[{"id":"qwen2.5-coder-3b-instruct-q4_k_m.gguf"}]}'
+        return '{"content":"pro-ai-server-ready"}'
 
     monkeypatch.setattr(cli, "resolve_adb", lambda: "adb")
     monkeypatch.setattr(cli, "select_device_serial", lambda adb, serial: "ABC123")
@@ -2917,8 +2922,9 @@ def test_native_runtime_android_smoke_executes_forward_and_prompt(monkeypatch):
 
     assert result.exit_code == 0
     assert ["adb", "-s", "ABC123", "forward", "tcp:11434", "tcp:11434"] in commands
-    assert any(command[-1].endswith("/api/tags") for command in commands)
-    assert any(command[-1].endswith("/api/generate") for command in commands)
+    assert any(command[-1].endswith("/health") for command in commands)
+    assert any(command[-1].endswith("/v1/models") for command in commands)
+    assert any(command[-1].endswith("/completion") for command in commands)
     assert "Native Android runtime smoke succeeded" in result.output
     assert "pro-ai-server-ready" in result.output
 
@@ -2934,7 +2940,7 @@ def test_native_runtime_android_smoke_fails_when_tags_are_not_ready(monkeypatch)
     result = runner.invoke(cli.app, ["native-runtime-android-smoke", "--execute"])
 
     assert result.exit_code == 1
-    assert "Ollama tags request failed" in result.output
+    assert "health check failed" in result.output
 
 
 def test_native_runtime_android_smoke_path_prints_plan_without_execute(monkeypatch):
@@ -2982,13 +2988,17 @@ def test_native_runtime_android_smoke_path_executes_install_start_and_smoke(monk
 
     def fake_run_command(command):
         commands.append(command)
+        if len(command) > 4 and "kill -0 $pid" in command[4]:
+            return "running:1234"
         return ""
 
     def fake_run_optional(command):
         commands.append(command)
-        if command[-1].endswith("/api/tags"):
-            return '{"models":[{"name":"qwen2.5-coder:3b"}]}'
-        return '{"response":"pro-ai-server-ready"}'
+        if command[-1].endswith("/health"):
+            return '{"status":"ok"}'
+        if command[-1].endswith("/v1/models"):
+            return '{"data":[{"id":"qwen2.5-coder-3b-instruct-q4_k_m.gguf"}]}'
+        return '{"content":"pro-ai-server-ready"}'
 
     monkeypatch.setattr(cli, "resolve_adb", lambda: "adb")
     monkeypatch.setattr(cli, "select_device_serial", lambda adb, serial: "ABC123")
@@ -3000,8 +3010,10 @@ def test_native_runtime_android_smoke_path_executes_install_start_and_smoke(monk
     assert result.exit_code == 0
     assert any(command[:4] == ["adb", "-s", "ABC123", "push"] for command in commands)
     assert any(command[:4] == ["adb", "-s", "ABC123", "shell"] for command in commands)
-    assert any(command[-1].endswith("/api/tags") for command in commands)
-    assert any(command[-1].endswith("/api/generate") for command in commands)
+    assert any(len(command) > 4 and "kill -0 $pid" in command[4] for command in commands)
+    assert any(command[-1].endswith("/health") for command in commands)
+    assert any(command[-1].endswith("/v1/models") for command in commands)
+    assert any(command[-1].endswith("/completion") for command in commands)
     assert "Installed and started native Android runtime" in result.output
     assert "Native Android runtime smoke succeeded" in result.output
 

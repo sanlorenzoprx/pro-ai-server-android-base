@@ -1,5 +1,6 @@
 from pathlib import Path
 import hashlib
+import json
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -2542,6 +2543,7 @@ def native_runtime_android_plan(
     manifest_path: Path | None = typer.Option(None, "--manifest", help="Optional native runtime manifest JSON path."),
     llama_server: Path = typer.Option(Path("llama-server"), help="Local llama.cpp server executable path."),
     remote_root: str = typer.Option(DEFAULT_ANDROID_NATIVE_RUNTIME_ROOT, help="Android remote runtime root."),
+    port: int = typer.Option(11434, help="Native runtime bind port."),
     serial: str | None = typer.Option(None, help="ADB device serial to use when multiple phones are connected."),
 ) -> None:
     """Preview native runtime asset placement on Android without mutating the phone."""
@@ -2553,6 +2555,7 @@ def native_runtime_android_plan(
             models_root=models_root,
             prefer=prefer,
             manifest=manifest,
+            port=port,
         )
         install_plan = build_native_android_runtime_install_plan(
             config,
@@ -2579,6 +2582,7 @@ def native_runtime_android_install(
     manifest_path: Path | None = typer.Option(None, "--manifest", help="Optional native runtime manifest JSON path."),
     llama_server: Path = typer.Option(Path("llama-server"), help="Local llama.cpp server executable path."),
     remote_root: str = typer.Option(DEFAULT_ANDROID_NATIVE_RUNTIME_ROOT, help="Android remote runtime root."),
+    port: int = typer.Option(11434, help="Native runtime bind port."),
     serial: str | None = typer.Option(None, help="ADB device serial to use when multiple phones are connected."),
     execute: bool = typer.Option(False, "--execute", help="Run the ADB install commands."),
     yes: bool = typer.Option(False, "--yes", help="Confirm phone mutation when using --execute."),
@@ -2597,6 +2601,7 @@ def native_runtime_android_install(
             models_root=models_root,
             prefer=prefer,
             manifest=manifest,
+            port=port,
         )
         install_plan = build_native_android_runtime_install_plan(
             config,
@@ -2639,6 +2644,7 @@ def native_runtime_android_start(
     models_root: Path = typer.Option(Path("models"), help="Root directory containing GGUF model files."),
     manifest_path: Path | None = typer.Option(None, "--manifest", help="Optional native runtime manifest JSON path."),
     remote_root: str = typer.Option(DEFAULT_ANDROID_NATIVE_RUNTIME_ROOT, help="Android remote runtime root."),
+    port: int = typer.Option(11434, help="Native runtime bind port."),
     serial: str | None = typer.Option(None, help="ADB device serial to use when multiple phones are connected."),
     execute: bool = typer.Option(False, "--execute", help="Run the ADB remote start commands."),
     yes: bool = typer.Option(False, "--yes", help="Confirm phone mutation when using --execute."),
@@ -2657,6 +2663,7 @@ def native_runtime_android_start(
             models_root=models_root,
             prefer=prefer,
             manifest=manifest,
+            port=port,
         )
         start_plan = build_native_android_runtime_start_plan(
             config,
@@ -2698,6 +2705,7 @@ def native_runtime_android_status(
     models_root: Path = typer.Option(Path("models"), help="Root directory containing GGUF model files."),
     manifest_path: Path | None = typer.Option(None, "--manifest", help="Optional native runtime manifest JSON path."),
     remote_root: str = typer.Option(DEFAULT_ANDROID_NATIVE_RUNTIME_ROOT, help="Android remote runtime root."),
+    port: int = typer.Option(11434, help="Native runtime bind port."),
     serial: str | None = typer.Option(None, help="ADB device serial to use when multiple phones are connected."),
     execute: bool = typer.Option(False, "--execute", help="Run the ADB remote status commands."),
 ) -> None:
@@ -2715,6 +2723,7 @@ def native_runtime_android_status(
             models_root=models_root,
             prefer=prefer,
             manifest=manifest,
+            port=port,
         )
         status_plan = build_native_android_runtime_status_plan(
             config,
@@ -2751,11 +2760,12 @@ def native_runtime_android_smoke(
     models_root: Path = typer.Option(Path("models"), help="Root directory containing GGUF model files."),
     manifest_path: Path | None = typer.Option(None, "--manifest", help="Optional native runtime manifest JSON path."),
     remote_root: str = typer.Option(DEFAULT_ANDROID_NATIVE_RUNTIME_ROOT, help="Android remote runtime root."),
+    port: int = typer.Option(11434, help="Native runtime bind port."),
     serial: str | None = typer.Option(None, help="ADB device serial to use when multiple phones are connected."),
-    prompt: str = typer.Option(DEFAULT_TEST_PROMPT, help="Small prompt to send to /api/generate."),
+    prompt: str = typer.Option(DEFAULT_TEST_PROMPT, help="Small prompt to send to /completion."),
     execute: bool = typer.Option(False, "--execute", help="Run the ADB forward and local runtime smoke requests."),
 ) -> None:
-    """Smoke-test the forwarded native Android runtime with /api/tags and /api/generate."""
+    """Smoke-test the forwarded native Android llama.cpp runtime."""
     adb = resolve_adb()
     if not adb:
         console.print("[red]adb not found. Release builds should include bundled platform-tools.[/red]")
@@ -2769,6 +2779,7 @@ def native_runtime_android_smoke(
             models_root=models_root,
             prefer=prefer,
             manifest=manifest,
+            port=port,
         )
         smoke_plan = build_native_android_runtime_smoke_plan(
             config,
@@ -2798,35 +2809,75 @@ def _execute_native_android_smoke(smoke_plan, adb: str) -> None:
         console.print(str(exc))
         raise typer.Exit(code=1) from exc
 
-    tags_output = run_optional_command(list(smoke_plan.commands[1]))
-    server_status = assess_ollama_server_status(tags_output)
+    health_output = run_optional_command(list(smoke_plan.commands[1]))
+    health_ok = _native_llamacpp_health_ok(health_output)
     console.print(f"Runtime API: {smoke_plan.api_base.rstrip('/')}")
-    if server_status.model_names:
+    if not health_ok:
+        console.print("[red]Native Android runtime health check failed.[/red]")
+        console.print(health_output.strip() or "No response from /health.")
+        raise typer.Exit(code=1)
+
+    models_output = run_optional_command(list(smoke_plan.commands[2]))
+    model_names = _native_llamacpp_model_names(models_output)
+    if model_names:
         console.print("Models:")
-        for model in server_status.model_names:
+        for model in model_names:
             console.print(f"  {model}")
     else:
         console.print("Models: none detected")
 
-    if not server_status.ok:
-        for warning in server_status.warnings:
-            console.print(f"[yellow]Warning:[/yellow] {warning}")
-        for instruction in server_status.instructions:
-            console.print(f"Next: {instruction}")
+    if smoke_plan.model not in model_names:
+        console.print(f"[red]Expected native model not listed: {smoke_plan.model}[/red]")
         raise typer.Exit(code=1)
 
-    generate_output = run_optional_command(list(smoke_plan.commands[2]))
-    prompt_status = assess_ollama_test_prompt_response(smoke_plan.model, generate_output)
-    if prompt_status.ok:
+    completion_output = run_optional_command(list(smoke_plan.commands[3]))
+    completion_text = _native_llamacpp_completion_text(completion_output)
+    if completion_text:
         console.print("[green]Native Android runtime smoke succeeded.[/green]")
-        console.print(f"Response: {prompt_status.response}")
+        console.print(f"Response: {completion_text}")
         return
 
-    for warning in prompt_status.warnings:
-        console.print(f"[yellow]Warning:[/yellow] {warning}")
-    for instruction in prompt_status.instructions:
-        console.print(f"Next: {instruction}")
+    console.print("[red]Native Android runtime completion failed.[/red]")
+    console.print(completion_output.strip() or "No response from /completion.")
     raise typer.Exit(code=1)
+
+
+def _native_llamacpp_health_ok(output: str) -> bool:
+    try:
+        payload = json.loads(output)
+    except json.JSONDecodeError:
+        return False
+    return isinstance(payload, dict) and payload.get("status") == "ok"
+
+
+def _native_llamacpp_model_names(output: str) -> tuple[str, ...]:
+    try:
+        payload = json.loads(output)
+    except json.JSONDecodeError:
+        return ()
+    if not isinstance(payload, dict):
+        return ()
+    models = payload.get("data")
+    if not isinstance(models, list):
+        return ()
+    names: list[str] = []
+    for model in models:
+        if isinstance(model, dict) and isinstance(model.get("id"), str):
+            names.append(model["id"])
+    return tuple(names)
+
+
+def _native_llamacpp_completion_text(output: str) -> str | None:
+    try:
+        payload = json.loads(output)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    content = payload.get("content")
+    if not isinstance(content, str) or not content.strip():
+        return None
+    return content.strip()
 
 
 @app.command("native-runtime-android-smoke-path")
@@ -2838,8 +2889,9 @@ def native_runtime_android_smoke_path(
     manifest_path: Path | None = typer.Option(None, "--manifest", help="Optional native runtime manifest JSON path."),
     llama_server: Path = typer.Option(Path("llama-server"), help="Local llama.cpp server executable path."),
     remote_root: str = typer.Option(DEFAULT_ANDROID_NATIVE_RUNTIME_ROOT, help="Android remote runtime root."),
+    port: int = typer.Option(11434, help="Native runtime bind port."),
     serial: str | None = typer.Option(None, help="ADB device serial to use when multiple phones are connected."),
-    prompt: str = typer.Option(DEFAULT_TEST_PROMPT, help="Small prompt to send to /api/generate."),
+    prompt: str = typer.Option(DEFAULT_TEST_PROMPT, help="Small prompt to send to /completion."),
     execute: bool = typer.Option(False, "--execute", help="Run install, start, and smoke commands."),
     yes: bool = typer.Option(False, "--yes", help="Confirm phone mutation when using --execute."),
 ) -> None:
@@ -2857,6 +2909,7 @@ def native_runtime_android_smoke_path(
             models_root=models_root,
             prefer=prefer,
             manifest=manifest,
+            port=port,
         )
         smoke_path_plan = build_native_android_runtime_smoke_path_plan(
             config,
@@ -2886,6 +2939,12 @@ def native_runtime_android_smoke_path(
             run_command([adb, *list(command[1:])])
         for command in smoke_path_plan.start_plan.commands:
             run_command([adb, *list(command[1:])])
+        status_plan = build_native_android_runtime_status_plan(
+            config,
+            remote_root=remote_root,
+            serial=selected_serial,
+        )
+        _execute_native_android_status_probe(status_plan, adb)
     except CommandError as exc:
         console.print("[red]Native Android runtime smoke path failed while running ADB.[/red]")
         console.print(str(exc))
@@ -2893,6 +2952,22 @@ def native_runtime_android_smoke_path(
 
     console.print(f"[green]Installed and started native Android runtime on device {selected_serial}.[/green]")
     _execute_native_android_smoke(smoke_path_plan.smoke_plan, adb)
+
+
+def _execute_native_android_status_probe(status_plan, adb: str) -> None:
+    status_output = ""
+    for command in status_plan.commands:
+        output = run_command([adb, *list(command[1:])])
+        if output:
+            status_output = output
+            console.print(output)
+
+    if any(line.startswith("running:") for line in status_output.splitlines()):
+        return
+
+    console.print("[red]Native Android runtime did not report a running remote PID after start.[/red]")
+    console.print(f"Remote log file: {status_plan.remote_log_file}")
+    raise typer.Exit(code=1)
 
 
 @app.command("native-runtime-android-stop")
@@ -2903,6 +2978,7 @@ def native_runtime_android_stop(
     models_root: Path = typer.Option(Path("models"), help="Root directory containing GGUF model files."),
     manifest_path: Path | None = typer.Option(None, "--manifest", help="Optional native runtime manifest JSON path."),
     remote_root: str = typer.Option(DEFAULT_ANDROID_NATIVE_RUNTIME_ROOT, help="Android remote runtime root."),
+    port: int = typer.Option(11434, help="Native runtime bind port."),
     serial: str | None = typer.Option(None, help="ADB device serial to use when multiple phones are connected."),
     execute: bool = typer.Option(False, "--execute", help="Run the ADB remote stop commands."),
     yes: bool = typer.Option(False, "--yes", help="Confirm phone mutation when using --execute."),
@@ -2921,6 +2997,7 @@ def native_runtime_android_stop(
             models_root=models_root,
             prefer=prefer,
             manifest=manifest,
+            port=port,
         )
         stop_plan = build_native_android_runtime_stop_plan(
             config,

@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
 from pro_ai_server.native_runtime import NativeRuntimeConfig, NativeRuntimeManifest
-from pro_ai_server.ollama import DEFAULT_TEST_PROMPT, build_ollama_generate_command, build_ollama_tags_command
+from pro_ai_server.ollama import DEFAULT_TEST_PROMPT
 
 
 Command = tuple[str, ...]
@@ -30,6 +31,7 @@ class NativeAndroidRuntimeInstallPlan:
     layout: NativeAndroidRuntimeLayout
     commands: tuple[Command, ...]
     instructions: tuple[str, ...]
+    support_libraries: tuple[Path, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -114,9 +116,15 @@ def build_native_android_runtime_install_plan(
         layout.logs_dir,
     )
     mkdir_command = _adb_command(("shell", "mkdir", "-p", *(str(path) for path in mkdir_targets)), serial)
+    support_libraries = _discover_support_libraries(local_llama_server)
+    library_push_commands = tuple(
+        _adb_command(("push", str(library), str(layout.bin_dir / library.name)), serial)
+        for library in support_libraries
+    )
     commands = (
         mkdir_command,
         _adb_command(("push", str(local_llama_server), str(layout.remote_llama_server)), serial),
+        *library_push_commands,
         _adb_command(("push", str(config.model.gguf_path), str(layout.remote_model)), serial),
         _adb_command(("push", str(local_manifest), str(layout.remote_manifest)), serial),
         _adb_command(("shell", "chmod", "+x", str(layout.remote_llama_server)), serial),
@@ -128,11 +136,13 @@ def build_native_android_runtime_install_plan(
         instructions=(
             f"Remote root: {layout.root}",
             f"Remote runtime binary: {layout.remote_llama_server}",
+            f"Support libraries: {len(support_libraries)} sibling .so file(s) copied to {layout.bin_dir}",
             f"Remote model: {layout.remote_model}",
             f"Remote manifest: {layout.remote_manifest}",
             f"Engine: {manifest.engine}",
             "After install, run the remote llama-server command from an Android shell or companion app lane.",
         ),
+        support_libraries=support_libraries,
     )
 
 
@@ -209,11 +219,12 @@ def build_native_android_runtime_smoke_plan(
         layout=layout,
         commands=(
             _adb_command(("forward", f"tcp:{config.port}", f"tcp:{config.port}"), serial),
-            build_ollama_tags_command(api_base),
-            build_ollama_generate_command(config.model.contract_name, prompt=prompt, api_base_url=api_base),
+            _build_llamacpp_health_command(api_base),
+            _build_llamacpp_models_command(api_base),
+            _build_llamacpp_completion_command(prompt, api_base),
         ),
         api_base=api_base,
-        model=config.model.contract_name,
+        model=config.model.gguf_path.name,
         prompt=prompt,
     )
 
@@ -256,6 +267,7 @@ def render_native_android_runtime_install_plan(plan: NativeAndroidRuntimeInstall
         "Native Android runtime install plan",
         f"Remote root: {plan.layout.root}",
         f"Remote binary: {plan.layout.remote_llama_server}",
+        f"Support libraries: {len(plan.support_libraries)}",
         f"Remote model: {plan.layout.remote_model}",
         f"Remote manifest: {plan.layout.remote_manifest}",
         "Commands:",
@@ -306,7 +318,7 @@ def render_native_android_runtime_smoke_plan(plan: NativeAndroidRuntimeSmokePlan
         "Native Android runtime smoke plan",
         f"Remote root: {plan.layout.root}",
         f"API base: {plan.api_base}",
-        f"Test model: {plan.model}",
+        f"Expected model: {plan.model}",
         "Commands:",
     ]
     lines.extend(" ".join(command) for command in plan.commands)
@@ -325,6 +337,39 @@ def _adb_command(args: tuple[str, ...], serial: str | None) -> Command:
     if serial:
         return ("adb", "-s", serial, *args)
     return ("adb", *args)
+
+
+def _build_llamacpp_health_command(api_base_url: str) -> Command:
+    return ("curl", "--silent", "--show-error", "--max-time", "30", f"{api_base_url.rstrip('/')}/health")
+
+
+def _build_llamacpp_models_command(api_base_url: str) -> Command:
+    return ("curl", "--silent", "--show-error", "--max-time", "30", f"{api_base_url.rstrip('/')}/v1/models")
+
+
+def _build_llamacpp_completion_command(prompt: str, api_base_url: str) -> Command:
+    payload = json.dumps(
+        {
+            "prompt": prompt,
+            "n_predict": 16,
+            "stream": False,
+        },
+        separators=(",", ":"),
+    )
+    return (
+        "curl",
+        "--silent",
+        "--show-error",
+        "--max-time",
+        "90",
+        "-X",
+        "POST",
+        "-H",
+        "Content-Type: application/json",
+        "-d",
+        payload,
+        f"{api_base_url.rstrip('/')}/completion",
+    )
 
 
 def _remote_start_shell(
@@ -350,8 +395,9 @@ def _remote_start_shell(
         args.extend(("--n-gpu-layers", str(config.gpu_layers)))
     command = " ".join(args)
     return (
-        f"mkdir -p {layout.state_dir} {layout.logs_dir} && "
-        f"nohup {command} > {remote_log_file} 2>&1 & "
+        f"mkdir -p {layout.state_dir} {layout.logs_dir}; "
+        f"export LD_LIBRARY_PATH={layout.bin_dir}:$LD_LIBRARY_PATH; "
+        f"nohup {command} > {remote_log_file} 2>&1 < /dev/null & "
         f"echo $! > {remote_pid_file}"
     )
 
@@ -375,3 +421,10 @@ def _remote_stop_shell(remote_pid_file: PurePosixPath) -> str:
         f"echo stopped:$pid; "
         f"else echo missing; fi"
     )
+
+
+def _discover_support_libraries(local_llama_server: Path) -> tuple[Path, ...]:
+    binary_dir = local_llama_server.parent
+    if not binary_dir.exists():
+        return ()
+    return tuple(sorted(binary_dir.glob("*.so"), key=lambda path: path.name))

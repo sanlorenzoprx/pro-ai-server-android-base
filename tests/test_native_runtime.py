@@ -41,10 +41,10 @@ from pro_ai_server.native_runtime import (
 from pro_ai_server.models import model_plan_for_profile
 
 
-def make_model() -> NativeRuntimeModel:
+def make_model(gguf_path: Path | None = None) -> NativeRuntimeModel:
     return NativeRuntimeModel(
         contract_name="qwen2.5-coder:1.5b",
-        gguf_path=Path("models") / "qwen2.5-coder-1.5b-instruct-q4_k_m.gguf",
+        gguf_path=gguf_path or Path("models") / "qwen2.5-coder-1.5b-instruct-q4_k_m.gguf",
     )
 
 
@@ -326,8 +326,8 @@ def test_build_llama_server_command_includes_gpu_layers_when_enabled():
     assert command.args[-1] == "8"
 
 
-def test_build_native_runtime_launch_plan_marks_missing_inputs():
-    config = NativeRuntimeConfig(model=make_model())
+def test_build_native_runtime_launch_plan_marks_missing_inputs(tmp_path):
+    config = NativeRuntimeConfig(model=make_model(tmp_path / "missing-model.gguf"))
 
     plan = build_native_runtime_launch_plan(config, executable=Path("missing-llama-server"))
 
@@ -351,8 +351,8 @@ def test_build_native_runtime_launch_plan_marks_ready_inputs(tmp_path):
     assert all(check.ok for check in plan.checks)
 
 
-def test_render_native_runtime_launch_plan_includes_readiness_and_command():
-    plan = build_native_runtime_launch_plan(NativeRuntimeConfig(model=make_model()))
+def test_render_native_runtime_launch_plan_includes_readiness_and_command(tmp_path):
+    plan = build_native_runtime_launch_plan(NativeRuntimeConfig(model=make_model(tmp_path / "missing-model.gguf")))
 
     rendered = "\n".join(render_native_runtime_launch_plan(plan))
 

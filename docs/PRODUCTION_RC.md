@@ -170,20 +170,28 @@ Evidence:
 Current live baseline checklist:
 
 - Termux/Ollama lightweight lane works.
-- Native Android lane exists but awaits assets.
-- Next blocker: acquire/place `llama-server` plus GGUF files, then rerun `native-runtime-assets` and `native-runtime-android-smoke-path`.
+- Native Android lane exists and the lightweight real-asset lane now starts on device.
+- Native Android professional lane still awaits professional GGUF assets.
+- Next blocker: turn repeated native asset placement into resumable/skip-unchanged automation so `native-runtime-android-smoke-path` does not spend operator time re-pushing assets that are already present.
 
 Native asset acquisition targets:
 
-- Android-compatible `llama-server`.
+- Android-compatible `llama-server`: acquired from llama.cpp Android arm64 release `b9071`.
 - Lightweight GGUF files:
-  - `qwen2.5-coder-1.5b-instruct-q4_k_m.gguf`
-  - `qwen2.5-coder-0.5b-instruct-q4_k_m.gguf`
+  - `qwen2.5-coder-1.5b-instruct-q4_k_m.gguf`: acquired locally.
+  - `qwen2.5-coder-0.5b-instruct-q4_k_m.gguf`: acquired locally and smoke-tested on device.
 - Professional GGUF files:
   - `qwen2.5-coder-3b-instruct-q4_k_m.gguf`
   - `qwen2.5-coder-1.5b-base-q4_k_m.gguf`
 
-Release impact: the customer-facing Termux/Ollama lightweight lane is live on the Moto baseline. The native Android lane is structurally ready in CLI/docs/tests, but not live-smoked until the Android `llama-server` binary and selected GGUF assets are acquired and placed.
+Native runtime follow-up evidence:
+
+- `native-runtime-assets --profile lightweight` passed against the real Android arm64 `llama-server` and local lightweight GGUF files.
+- Native `llama-server` started on device `ZY22GKMWPN` over `127.0.0.1:11435` with sibling llama.cpp shared libraries deployed to the Android runtime `bin` directory.
+- `native-runtime-android-smoke --profile lightweight --prefer autocomplete --serial ZY22GKMWPN --port 11435 --execute` passed against `/health`, `/v1/models`, and `/completion`.
+- The full `native-runtime-android-smoke-path` wrapper installed and started the server, but exceeded the host command timeout during the long ADB asset path. The verified native runtime remained live afterward and passed the standalone smoke.
+
+Release impact: the customer-facing Termux/Ollama lightweight lane is live on the Moto baseline. The native Android lightweight lane is now proven with real local assets on the Moto baseline; the next production hardening step is resumable native asset installation plus professional asset acquisition.
 
 ## Hardware Smoke Attempts
 
