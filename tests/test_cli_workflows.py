@@ -2769,9 +2769,15 @@ def test_native_runtime_android_install_refuses_execute_without_yes(monkeypatch)
     assert "without --yes" in result.output
 
 
-def test_native_runtime_android_install_executes_adb_commands(monkeypatch):
+def test_native_runtime_android_install_executes_adb_commands(monkeypatch, tmp_path):
     runner = CliRunner()
     commands = []
+    llama_server = tmp_path / "llama-server"
+    models_root = tmp_path / "models"
+    model_file = models_root / "qwen2.5-coder-0.5b-instruct-q4_k_m.gguf"
+    llama_server.write_text("binary")
+    models_root.mkdir()
+    model_file.write_text("model")
 
     monkeypatch.setattr(cli, "resolve_adb", lambda: "adb")
     monkeypatch.setattr(cli, "select_device_serial", lambda adb, serial: "ABC123")
@@ -2782,11 +2788,13 @@ def test_native_runtime_android_install_executes_adb_commands(monkeypatch):
         [
             "native-runtime-android-install",
             "--profile",
-            "professional",
+            "lightweight",
+            "--prefer",
+            "autocomplete",
             "--models-root",
-            "models",
+            str(models_root),
             "--llama-server",
-            "llama-server",
+            str(llama_server),
             "--execute",
             "--yes",
         ],
@@ -2797,6 +2805,53 @@ def test_native_runtime_android_install_executes_adb_commands(monkeypatch):
     assert any(command[:4] == ["adb", "-s", "ABC123", "push"] for command in commands)
     assert any(command == ["adb", "-s", "ABC123", "forward", "tcp:11434", "tcp:11434"] for command in commands)
     assert "Installed native runtime assets" in result.output
+
+
+def test_native_runtime_android_install_skips_unchanged_assets(monkeypatch, tmp_path):
+    runner = CliRunner()
+    commands = []
+    llama_server = tmp_path / "llama-server"
+    models_root = tmp_path / "models"
+    model_file = models_root / "qwen2.5-coder-0.5b-instruct-q4_k_m.gguf"
+    llama_server.write_text("binary")
+    models_root.mkdir()
+    model_file.write_text("model")
+
+    def fake_run_command(command):
+        commands.append(command)
+        if len(command) > 4 and command[3] == "shell" and "wc -c" in command[4]:
+            if "llama-server" in command[4]:
+                return str(llama_server.stat().st_size)
+            if "qwen2.5-coder-0.5b-instruct-q4_k_m.gguf" in command[4]:
+                return str(model_file.stat().st_size)
+            if "native-runtime-manifest.json" in command[4]:
+                return str((cli.package_root() / "native-runtime-manifest.json").stat().st_size)
+        return ""
+
+    monkeypatch.setattr(cli, "resolve_adb", lambda: "adb")
+    monkeypatch.setattr(cli, "select_device_serial", lambda adb, serial: "ABC123")
+    monkeypatch.setattr(cli, "run_command", fake_run_command)
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "native-runtime-android-install",
+            "--profile",
+            "lightweight",
+            "--prefer",
+            "autocomplete",
+            "--models-root",
+            str(models_root),
+            "--llama-server",
+            str(llama_server),
+            "--execute",
+            "--yes",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert not any(command[:4] == ["adb", "-s", "ABC123", "push"] for command in commands)
+    assert "Skipped unchanged asset" in result.output
 
 
 def test_native_runtime_android_start_prints_plan_without_execute(monkeypatch):
@@ -2943,6 +2998,37 @@ def test_native_runtime_android_smoke_fails_when_tags_are_not_ready(monkeypatch)
     assert "health check failed" in result.output
 
 
+def test_native_runtime_android_smoke_waits_while_model_loads(monkeypatch):
+    runner = CliRunner()
+    health_outputs = [
+        '{"error":{"message":"Loading model","type":"unavailable_error","code":503}}',
+        '{"status":"ok"}',
+    ]
+    commands = []
+    sleeps = []
+
+    def fake_run_optional(command):
+        commands.append(command)
+        if command[-1].endswith("/health"):
+            return health_outputs.pop(0)
+        if command[-1].endswith("/v1/models"):
+            return '{"data":[{"id":"qwen2.5-coder-3b-instruct-q4_k_m.gguf"}]}'
+        return '{"content":"pro-ai-server-ready"}'
+
+    monkeypatch.setattr(cli, "resolve_adb", lambda: "adb")
+    monkeypatch.setattr(cli, "select_device_serial", lambda adb, serial: "ABC123")
+    monkeypatch.setattr(cli, "run_command", lambda command: commands.append(command) or "")
+    monkeypatch.setattr(cli.time, "sleep", lambda seconds: sleeps.append(seconds))
+    monkeypatch.setattr(cli, "run_optional_command", fake_run_optional)
+
+    result = runner.invoke(cli.app, ["native-runtime-android-smoke", "--execute"])
+
+    assert result.exit_code == 0
+    assert sleeps == [2.0]
+    assert sum(1 for command in commands if command[-1].endswith("/health")) == 2
+    assert "Native Android runtime smoke succeeded" in result.output
+
+
 def test_native_runtime_android_smoke_path_prints_plan_without_execute(monkeypatch):
     runner = CliRunner()
 
@@ -2982,9 +3068,15 @@ def test_native_runtime_android_smoke_path_refuses_execute_without_yes(monkeypat
     assert "without --yes" in result.output
 
 
-def test_native_runtime_android_smoke_path_executes_install_start_and_smoke(monkeypatch):
+def test_native_runtime_android_smoke_path_executes_install_start_and_smoke(monkeypatch, tmp_path):
     runner = CliRunner()
     commands = []
+    llama_server = tmp_path / "llama-server"
+    models_root = tmp_path / "models"
+    model_file = models_root / "qwen2.5-coder-0.5b-instruct-q4_k_m.gguf"
+    llama_server.write_text("binary")
+    models_root.mkdir()
+    model_file.write_text("model")
 
     def fake_run_command(command):
         commands.append(command)
@@ -2997,7 +3089,7 @@ def test_native_runtime_android_smoke_path_executes_install_start_and_smoke(monk
         if command[-1].endswith("/health"):
             return '{"status":"ok"}'
         if command[-1].endswith("/v1/models"):
-            return '{"data":[{"id":"qwen2.5-coder-3b-instruct-q4_k_m.gguf"}]}'
+            return '{"data":[{"id":"qwen2.5-coder-0.5b-instruct-q4_k_m.gguf"}]}'
         return '{"content":"pro-ai-server-ready"}'
 
     monkeypatch.setattr(cli, "resolve_adb", lambda: "adb")
@@ -3005,7 +3097,22 @@ def test_native_runtime_android_smoke_path_executes_install_start_and_smoke(monk
     monkeypatch.setattr(cli, "run_command", fake_run_command)
     monkeypatch.setattr(cli, "run_optional_command", fake_run_optional)
 
-    result = runner.invoke(cli.app, ["native-runtime-android-smoke-path", "--execute", "--yes"])
+    result = runner.invoke(
+        cli.app,
+        [
+            "native-runtime-android-smoke-path",
+            "--profile",
+            "lightweight",
+            "--prefer",
+            "autocomplete",
+            "--models-root",
+            str(models_root),
+            "--llama-server",
+            str(llama_server),
+            "--execute",
+            "--yes",
+        ],
+    )
 
     assert result.exit_code == 0
     assert any(command[:4] == ["adb", "-s", "ABC123", "push"] for command in commands)

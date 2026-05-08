@@ -3,6 +3,7 @@ import hashlib
 import json
 import shutil
 import subprocess
+import time
 from dataclasses import dataclass
 from urllib.parse import urlparse
 from urllib.request import urlretrieve
@@ -2626,8 +2627,7 @@ def native_runtime_android_install(
         raise typer.Exit(code=1)
 
     try:
-        for command in install_plan.commands:
-            run_command([adb, *list(command[1:])])
+        _execute_native_android_install_plan(install_plan, adb)
     except CommandError as exc:
         console.print("[red]Native runtime Android install failed while running ADB.[/red]")
         console.print(str(exc))
@@ -2809,7 +2809,7 @@ def _execute_native_android_smoke(smoke_plan, adb: str) -> None:
         console.print(str(exc))
         raise typer.Exit(code=1) from exc
 
-    health_output = run_optional_command(list(smoke_plan.commands[1]))
+    health_output = _wait_for_native_llamacpp_health(smoke_plan.commands[1])
     health_ok = _native_llamacpp_health_ok(health_output)
     console.print(f"Runtime API: {smoke_plan.api_base.rstrip('/')}")
     if not health_ok:
@@ -2842,12 +2842,38 @@ def _execute_native_android_smoke(smoke_plan, adb: str) -> None:
     raise typer.Exit(code=1)
 
 
+def _wait_for_native_llamacpp_health(command, *, attempts: int = 45, delay_seconds: float = 2.0) -> str:
+    output = ""
+    for attempt in range(attempts):
+        output = run_optional_command(list(command))
+        if _native_llamacpp_health_ok(output):
+            return output
+        if attempt + 1 < attempts and _native_llamacpp_health_loading(output):
+            time.sleep(delay_seconds)
+            continue
+        break
+    return output
+
+
 def _native_llamacpp_health_ok(output: str) -> bool:
     try:
         payload = json.loads(output)
     except json.JSONDecodeError:
         return False
     return isinstance(payload, dict) and payload.get("status") == "ok"
+
+
+def _native_llamacpp_health_loading(output: str) -> bool:
+    try:
+        payload = json.loads(output)
+    except json.JSONDecodeError:
+        return False
+    if not isinstance(payload, dict):
+        return False
+    error = payload.get("error")
+    if not isinstance(error, dict):
+        return False
+    return error.get("code") == 503 or error.get("message") == "Loading model"
 
 
 def _native_llamacpp_model_names(output: str) -> tuple[str, ...]:
@@ -2935,8 +2961,7 @@ def native_runtime_android_smoke_path(
         raise typer.Exit(code=1)
 
     try:
-        for command in smoke_path_plan.install_plan.commands:
-            run_command([adb, *list(command[1:])])
+        _execute_native_android_install_plan(smoke_path_plan.install_plan, adb)
         for command in smoke_path_plan.start_plan.commands:
             run_command([adb, *list(command[1:])])
         status_plan = build_native_android_runtime_status_plan(
@@ -2952,6 +2977,51 @@ def native_runtime_android_smoke_path(
 
     console.print(f"[green]Installed and started native Android runtime on device {selected_serial}.[/green]")
     _execute_native_android_smoke(smoke_path_plan.smoke_plan, adb)
+
+
+def _execute_native_android_install_plan(install_plan, adb: str) -> None:
+    run_command([adb, *list(install_plan.commands[0][1:])])
+    serial_args = _adb_serial_args(install_plan.commands[0])
+
+    for asset in install_plan.assets:
+        local_size = _local_asset_size(asset.local_path)
+        remote_size = _remote_asset_size(adb, serial_args, str(asset.remote_path))
+        if remote_size == local_size:
+            console.print(f"Skipped unchanged asset: {asset.remote_path} ({local_size} bytes)")
+            continue
+
+        console.print(f"Pushing asset: {asset.remote_path} ({local_size} bytes)")
+        run_command([adb, *serial_args, "push", str(asset.local_path), str(asset.remote_path)])
+
+    for command in install_plan.commands[-2:]:
+        run_command([adb, *list(command[1:])])
+
+
+def _local_asset_size(path: Path) -> int:
+    try:
+        return path.stat().st_size
+    except OSError as exc:
+        raise CommandError(["stat", str(path)], 1, "", str(exc)) from exc
+
+
+def _remote_asset_size(adb: str, serial_args: tuple[str, ...], remote_path: str) -> int | None:
+    command = [
+        adb,
+        *serial_args,
+        "shell",
+        f"if [ -f {remote_path} ]; then wc -c < {remote_path}; else echo missing; fi",
+    ]
+    output = run_command(command).strip()
+    try:
+        return int(output.splitlines()[-1].strip())
+    except (IndexError, ValueError):
+        return None
+
+
+def _adb_serial_args(command) -> tuple[str, ...]:
+    if len(command) > 2 and command[1] == "-s":
+        return (command[1], command[2])
+    return ()
 
 
 def _execute_native_android_status_probe(status_plan, adb: str) -> None:

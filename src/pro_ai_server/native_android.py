@@ -27,11 +27,19 @@ class NativeAndroidRuntimeLayout:
 
 
 @dataclass(frozen=True)
+class NativeAndroidRuntimeAsset:
+    key: str
+    local_path: Path
+    remote_path: PurePosixPath
+
+
+@dataclass(frozen=True)
 class NativeAndroidRuntimeInstallPlan:
     layout: NativeAndroidRuntimeLayout
     commands: tuple[Command, ...]
     instructions: tuple[str, ...]
     support_libraries: tuple[Path, ...] = ()
+    assets: tuple[NativeAndroidRuntimeAsset, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -117,16 +125,18 @@ def build_native_android_runtime_install_plan(
     )
     mkdir_command = _adb_command(("shell", "mkdir", "-p", *(str(path) for path in mkdir_targets)), serial)
     support_libraries = _discover_support_libraries(local_llama_server)
-    library_push_commands = tuple(
-        _adb_command(("push", str(library), str(layout.bin_dir / library.name)), serial)
-        for library in support_libraries
+    assets = (
+        NativeAndroidRuntimeAsset("llama-server", local_llama_server, layout.remote_llama_server),
+        *(
+            NativeAndroidRuntimeAsset(f"library:{library.name}", library, layout.bin_dir / library.name)
+            for library in support_libraries
+        ),
+        NativeAndroidRuntimeAsset(config.model.gguf_path.name, config.model.gguf_path, layout.remote_model),
+        NativeAndroidRuntimeAsset("manifest", local_manifest, layout.remote_manifest),
     )
     commands = (
         mkdir_command,
-        _adb_command(("push", str(local_llama_server), str(layout.remote_llama_server)), serial),
-        *library_push_commands,
-        _adb_command(("push", str(config.model.gguf_path), str(layout.remote_model)), serial),
-        _adb_command(("push", str(local_manifest), str(layout.remote_manifest)), serial),
+        *(_adb_command(("push", str(asset.local_path), str(asset.remote_path)), serial) for asset in assets),
         _adb_command(("shell", "chmod", "+x", str(layout.remote_llama_server)), serial),
         _adb_command(("forward", f"tcp:{config.port}", f"tcp:{config.port}"), serial),
     )
@@ -143,6 +153,7 @@ def build_native_android_runtime_install_plan(
             "After install, run the remote llama-server command from an Android shell or companion app lane.",
         ),
         support_libraries=support_libraries,
+        assets=assets,
     )
 
 

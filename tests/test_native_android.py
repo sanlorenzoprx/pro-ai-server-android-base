@@ -53,6 +53,11 @@ def test_build_native_android_runtime_install_plan_includes_serial_and_pushes_as
     )
 
     assert plan.commands[0][:3] == ("adb", "-s", "ABC123")
+    assert [asset.key for asset in plan.assets] == [
+        "llama-server",
+        "qwen2.5-coder-0.5b-instruct-q4_k_m.gguf",
+        "manifest",
+    ]
     assert (
         "adb",
         "-s",

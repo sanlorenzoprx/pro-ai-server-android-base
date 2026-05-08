@@ -190,6 +190,7 @@ Native runtime follow-up evidence:
 - Native `llama-server` started on device `ZY22GKMWPN` over `127.0.0.1:11435` with sibling llama.cpp shared libraries deployed to the Android runtime `bin` directory.
 - `native-runtime-android-smoke --profile lightweight --prefer autocomplete --serial ZY22GKMWPN --port 11435 --execute` passed against `/health`, `/v1/models`, and `/completion`.
 - The full `native-runtime-android-smoke-path` wrapper installed and started the server, but exceeded the host command timeout during the long ADB asset path. The verified native runtime remained live afterward and passed the standalone smoke.
+- After resumable install hardening, `native-runtime-android-smoke-path --profile lightweight --prefer autocomplete --serial ZY22GKMWPN --port 11435 --execute --yes` skipped all unchanged native assets and completed the full install/start/smoke path in one short run.
 
 Release impact: the customer-facing Termux/Ollama lightweight lane is live on the Moto baseline. The native Android lightweight lane is now proven with real local assets on the Moto baseline; the next production hardening step is resumable native asset installation plus professional asset acquisition.
 
