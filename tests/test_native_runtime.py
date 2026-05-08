@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+from pro_ai_server import native_runtime
 from pro_ai_server.native_runtime import (
     DEFAULT_NATIVE_RUNTIME_HOST,
     DEFAULT_NATIVE_RUNTIME_PORT,
@@ -465,6 +466,34 @@ def test_build_native_runtime_lifecycle_status_marks_stale_state(tmp_path):
     assert status.stale_state is True
     rendered = "\n".join(render_native_runtime_lifecycle_status(status))
     assert "Warning: recorded PID is not running" in rendered
+
+
+def test_process_exists_treats_windows_system_error_as_not_running(monkeypatch):
+    def raise_system_error(pid, signal):
+        raise SystemError("stale Windows PID")
+
+    monkeypatch.setattr(native_runtime.os, "kill", raise_system_error)
+
+    assert native_runtime.is_process_running(1234) is False
+
+
+def test_stop_native_runtime_removes_stale_state_when_termination_reports_os_error(monkeypatch, tmp_path):
+    state_path = tmp_path / "native-runtime-state.json"
+    process = NativeRuntimeProcess(pid=1234, command=build_llama_server_command(NativeRuntimeConfig(model=make_model())))
+    state = build_native_runtime_state(process, NativeRuntimeConfig(model=make_model()))
+    write_native_runtime_state(state, state_path)
+
+    def raise_os_error(pid, signal):
+        raise OSError("stale process")
+
+    monkeypatch.setattr(native_runtime.os, "kill", raise_os_error)
+
+    stopped_state, removed = stop_native_runtime(state_path)
+
+    assert stopped_state is not None
+    assert stopped_state.pid == 1234
+    assert removed is True
+    assert not state_path.exists()
 
 
 def test_stop_native_runtime_terminates_recorded_pid_and_removes_state(tmp_path):

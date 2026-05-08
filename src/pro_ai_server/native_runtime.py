@@ -652,7 +652,7 @@ def _process_exists(pid: int) -> bool:
         return False
     try:
         os.kill(pid, 0)
-    except OSError:
+    except (OSError, SystemError, ValueError):
         return False
     return True
 
@@ -660,4 +660,7 @@ def _process_exists(pid: int) -> bool:
 def _terminate_process(pid: int) -> None:
     if pid <= 0:
         raise ValueError("Native runtime PID must be positive.")
-    os.kill(pid, 15)
+    try:
+        os.kill(pid, 15)
+    except (OSError, SystemError, ValueError):
+        return

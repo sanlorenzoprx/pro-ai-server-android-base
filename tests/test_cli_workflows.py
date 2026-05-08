@@ -2548,6 +2548,7 @@ def test_native_runtime_start_exits_when_readiness_fails(monkeypatch, tmp_path):
     runner = CliRunner()
     executable = tmp_path / "llama-server"
     model_file = tmp_path / "qwen2.5-coder-3b-instruct-q4_k_m.gguf"
+    state_path = tmp_path / "native-runtime-state.json"
     executable.write_text("binary", encoding="utf-8")
     model_file.write_text("model", encoding="utf-8")
 
@@ -2575,6 +2576,8 @@ def test_native_runtime_start_exits_when_readiness_fails(monkeypatch, tmp_path):
             str(tmp_path),
             "--llama-server",
             str(executable),
+            "--state-path",
+            str(state_path),
         ],
     )
 
